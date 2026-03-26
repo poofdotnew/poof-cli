@@ -57,10 +57,14 @@ var browserCmd = &cobra.Command{
 		}
 		url := env.BaseURL + "/auth/cli#code=" + resp.Code
 
-		output.Success("Sign-in link (expires in 30s):")
-		fmt.Println()
-		fmt.Printf("  %s\n", url)
-		fmt.Println()
+		output.Print(map[string]string{
+			"url": url,
+		}, func() {
+			output.Success("Sign-in link (expires in 30s):")
+			fmt.Println()
+			fmt.Printf("  %s\n", url)
+			fmt.Println()
+		})
 		return nil
 	},
 }
