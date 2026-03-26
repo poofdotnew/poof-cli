@@ -12,7 +12,7 @@ LDFLAGS = -ldflags "\
   -X $(VERSION_PKG).Date=$(DATE) \
   -s -w"
 
-.PHONY: build install clean test fmt vet lint lint-fix coverage coverage-text all release
+.PHONY: build install clean test fmt vet lint lint-fix coverage coverage-text all release install-hooks
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY_NAME) ./cmd/poof
@@ -54,5 +54,10 @@ release: clean
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o dist/$(BINARY_NAME)-windows-amd64.exe ./cmd/poof
 	@echo "Binaries in dist/"
 	@ls -lh dist/
+
+install-hooks:
+	cp .githooks/pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "Pre-commit hook installed."
 
 all: lint test build

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Pre-commit hook: validates formatting, linting, vetting, and tests.
+# Install with: make install-hooks
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+
+failed=0
+
+step() { printf "${NC}▸ %s... " "$1"; }
+pass() { printf "${GREEN}ok${NC}\n"; }
+fail() { printf "${RED}FAILED${NC}\n"; failed=1; }
+warn() { printf "${YELLOW}%s${NC}\n" "$1"; }
+
+echo "Running pre-commit checks..."
+echo
+
+# 1. Check gofmt on staged .go files
+step "Checking gofmt"
+staged_go_files=$(git diff --cached --name-only --diff-filter=ACM -- '*.go' || true)
+if [ -n "$staged_go_files" ]; then
+    unformatted=$(echo "$staged_go_files" | xargs gofmt -l 2>/dev/null || true)
+    if [ -n "$unformatted" ]; then
+        fail
+        echo "  The following files need formatting (run 'make fmt'):"
+        echo "$unformatted" | sed 's/^/    /'
+    else
+        pass
+    fi
+else
+    pass
+fi
+
+# 2. go vet
+step "Running go vet"
+if go vet ./... 2>/dev/null; then
+    pass
+else
+    fail
+fi
+
+# 3. golangci-lint (skip if not installed)
+if command -v golangci-lint &>/dev/null; then
+    step "Running golangci-lint"
+    if golangci-lint run ./... 2>/dev/null; then
+        pass
+    else
+        fail
+    fi
+else
+    step "Running golangci-lint"
+    warn "skipped (not installed)"
+fi
+
+# 4. Build
+step "Verifying build"
+if go build ./... 2>/dev/null; then
+    pass
+else
+    fail
+fi
+
+# 5. Tests
+step "Running tests"
+if go test -race -count=1 ./... >/dev/null 2>&1; then
+    pass
+else
+    fail
+    echo "  Run 'make test' to see failures."
+fi
+
+echo
+if [ $failed -ne 0 ]; then
+    printf "${RED}Pre-commit checks failed.${NC} Fix the issues above and try again.\n"
+    exit 1
+fi
+
+printf "${GREEN}All pre-commit checks passed.${NC}\n"
