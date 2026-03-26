@@ -88,8 +88,8 @@ var chatActiveCmd = &cobra.Command{
 }
 
 var chatCancelCmd = &cobra.Command{
-	Use:   "cancel",
-	Short: "Cancel in-progress AI execution",
+	Use:     "cancel",
+	Short:   "Cancel in-progress AI execution",
 	Example: `  poof chat cancel -p <id>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -105,14 +105,14 @@ var chatCancelCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("AI execution cancelled.")
+		output.Success("AI execution canceled.")
 		return nil
 	},
 }
 
 var chatSteerCmd = &cobra.Command{
 	Use:   "steer",
-	Short: "Redirect AI mid-execution without cancelling",
+	Short: "Redirect AI mid-execution without canceling",
 	Example: `  poof chat steer -p <id> -m "Focus on the backend first"
   poof chat steer -p <id> -m "Skip the UI, just do policies"`,
 	RunE: func(cmd *cobra.Command, args []string) error {

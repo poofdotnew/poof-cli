@@ -49,7 +49,7 @@ var preferencesSetCmd = &cobra.Command{
 	Short: "Set AI model tiers (average, smart, genius)",
 	Example: `  poof preferences set mainChat=genius
   poof preferences set mainChat=genius codingAgent=smart`,
-	Args:  cobra.MinimumNArgs(1),
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err

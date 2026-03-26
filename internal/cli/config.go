@@ -49,7 +49,7 @@ var configSetCmd = &cobra.Command{
 	Example: `  poof config set default_project_id <id>
   poof config set environment staging
   poof config set output_format json`,
-	Args:  cobra.ExactArgs(2),
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
 

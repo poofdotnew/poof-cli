@@ -6,6 +6,12 @@ Single binary. No Node.js. No browser. All 30 Poof platform operations from your
 
 ## Install
 
+**Homebrew:**
+
+```bash
+brew install poofdotnew/tap/poof
+```
+
 **Go:**
 
 ```bash
@@ -353,25 +359,72 @@ git clone https://github.com/poofdotnew/poof-cli.git
 cd poof-cli
 
 make build          # build binary to bin/poof
-make test           # run all tests
-make lint           # fmt + vet
+make test           # run tests with race detector
+make lint           # run golangci-lint
+make lint-fix       # run golangci-lint with auto-fix
+make fmt            # format all Go files
+make vet            # run go vet
+make coverage       # run tests and open HTML coverage report
+make coverage-text  # print coverage summary to terminal
 make all            # lint + test + build
 make release        # cross-compile for all platforms
 make install        # install to $GOPATH/bin
 ```
 
+### Prerequisites
+
+- **Go 1.22+**
+- **[golangci-lint](https://golangci-lint.run/welcome/install/)** for `make lint`:
+  ```bash
+  go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+  ```
+
+### CI/CD
+
+CI runs automatically on every push to `main` and on pull requests:
+
+- **Lint** — golangci-lint (errcheck, staticcheck, govet, misspell, gofmt, and more)
+- **Test** — `go test -race` with coverage reporting
+- **Build** — verifies the binary compiles and runs
+
+See [`.github/workflows/ci.yml`](.github/workflows/ci.yml) for details.
+
 ### Releasing
 
-Releases are automated with [GoReleaser](https://goreleaser.com/):
+Releases are automated with [GoReleaser](https://goreleaser.com/) via GitHub Actions.
+
+**To create a release:**
 
 ```bash
 git tag v0.1.0
-git push --tags
-goreleaser release
+git push origin v0.1.0
 ```
 
-This builds binaries for macOS (arm64/amd64), Linux (arm64/amd64), and Windows (amd64), creates archives, checksums, and a GitHub release.
+This triggers the [release workflow](.github/workflows/release.yml) which:
+
+1. Runs `go mod tidy` and `go test ./...`
+2. Cross-compiles for macOS (arm64/amd64), Linux (arm64/amd64), and Windows (amd64)
+3. Creates archives (tar.gz for Unix, zip for Windows) with checksums
+4. Publishes a GitHub Release with auto-generated changelog
+5. Pushes a Homebrew formula to [`poofdotnew/homebrew-tap`](https://github.com/poofdotnew/homebrew-tap)
+
+### Homebrew Tap Setup
+
+To enable `brew install poofdotnew/tap/poof`, the following one-time setup is needed:
+
+1. **Create the tap repository** at [github.com/poofdotnew/homebrew-tap](https://github.com/poofdotnew/homebrew-tap) (empty repo, just needs to exist)
+2. **Create a Personal Access Token** with `repo` scope that has push access to `poofdotnew/homebrew-tap`
+3. **Add the token as a repository secret** in `poofdotnew/poof-cli` → Settings → Secrets → Actions → New secret:
+   - Name: `HOMEBREW_TAP_TOKEN`
+   - Value: the PAT from step 2
+4. **Tag and push** a release — GoReleaser will automatically push the formula
+
+Once configured, users can install with:
+
+```bash
+brew install poofdotnew/tap/poof
+```
 
 ## License
 
-MIT
+[MIT](LICENSE)

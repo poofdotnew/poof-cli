@@ -25,7 +25,7 @@ type mockAuthProvider struct {
 	invalidateCalled atomic.Int32
 	// getTokenCalled tracks how many times GetToken was called.
 	getTokenCalled atomic.Int32
-	// tokenFunc, if set, overrides the default GetToken behaviour.
+	// tokenFunc, if set, overrides the default GetToken behavior.
 	tokenFunc func() (string, error)
 }
 
@@ -527,12 +527,8 @@ func TestDoRequest_NoBypassTokenWhenEmpty(t *testing.T) {
 	var bypassHeaderPresent bool
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		receivedBypass = r.Header.Get("x-vercel-protection-bypass")
+		receivedBypass = r.Header.Get("X-Vercel-Protection-Bypass")
 		_, bypassHeaderPresent = r.Header["X-Vercel-Protection-Bypass"]
-		// Also check lowercase since Go canonicalizes headers.
-		if !bypassHeaderPresent {
-			_, bypassHeaderPresent = r.Header["x-vercel-protection-bypass"]
-		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("{}"))
 	}))
@@ -608,7 +604,7 @@ func TestDoRequest_ContextCancellation(t *testing.T) {
 
 	_, _, err := client.doRequest(ctx, http.MethodGet, "/test", nil)
 	if err == nil {
-		t.Fatal("doRequest() should fail with cancelled context")
+		t.Fatal("doRequest() should fail with canceled context")
 	}
 	if !strings.Contains(err.Error(), "request failed") {
 		t.Errorf("expected 'request failed' in error, got: %v", err)

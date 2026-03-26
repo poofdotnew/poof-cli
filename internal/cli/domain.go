@@ -13,8 +13,8 @@ var domainCmd = &cobra.Command{
 }
 
 var domainListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List custom domains",
+	Use:     "list",
+	Short:   "List custom domains",
 	Example: `  poof domain list -p <id>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -55,7 +55,7 @@ var domainAddCmd = &cobra.Command{
 	Short: "Add a custom domain",
 	Example: `  poof domain add myapp.com -p <id>
   poof domain add myapp.com -p <id> --default`,
-	Args:  cobra.ExactArgs(1),
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err

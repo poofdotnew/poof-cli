@@ -52,10 +52,10 @@ var taskListCmd = &cobra.Command{
 }
 
 var taskGetCmd = &cobra.Command{
-	Use:   "get [taskId]",
-	Short: "Get task details",
+	Use:     "get [taskId]",
+	Short:   "Get task details",
 	Example: `  poof task get <taskId> -p <id>`,
-	Args:  cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err

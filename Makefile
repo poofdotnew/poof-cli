@@ -12,7 +12,7 @@ LDFLAGS = -ldflags "\
   -X $(VERSION_PKG).Date=$(DATE) \
   -s -w"
 
-.PHONY: build install clean test fmt vet lint all release
+.PHONY: build install clean test fmt vet lint lint-fix coverage coverage-text all release
 
 build:
 	go build $(LDFLAGS) -o bin/$(BINARY_NAME) ./cmd/poof
@@ -21,18 +21,29 @@ install:
 	go install $(LDFLAGS) ./cmd/poof
 
 clean:
-	rm -rf bin/ dist/
+	rm -rf bin/ dist/ coverage.out
 
 test:
-	go test ./... -count=1
+	go test -race ./... -count=1
 
 fmt:
-	go fmt ./...
+	gofmt -w .
 
 vet:
 	go vet ./...
 
-lint: fmt vet
+lint:
+	golangci-lint run ./...
+
+lint-fix:
+	golangci-lint run --fix ./...
+
+coverage:
+	go test -race -coverprofile=coverage.out ./...
+	go tool cover -html=coverage.out
+
+coverage-text:
+	go test -race -cover ./...
 
 # Cross-compile for all major platforms
 release: clean

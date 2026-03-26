@@ -17,19 +17,19 @@ type TaskResponse struct {
 }
 
 type TestResultsResponse struct {
-	Results []TestResult    `json:"results"`
-	Summary TestSummary     `json:"summary"`
+	Results []TestResult `json:"results"`
+	Summary TestSummary  `json:"summary"`
 }
 
 type TestResult struct {
-	ID        string         `json:"id"`
-	FileName  string         `json:"fileName"`
-	TestName  string         `json:"testName"`
-	Status    string         `json:"status"`
-	Counts    TestCounts     `json:"counts"`
-	LastError string         `json:"lastError"`
-	Duration  float64        `json:"duration"`
-	StartedAt string         `json:"startedAt"`
+	ID        string     `json:"id"`
+	FileName  string     `json:"fileName"`
+	TestName  string     `json:"testName"`
+	Status    string     `json:"status"`
+	Counts    TestCounts `json:"counts"`
+	LastError string     `json:"lastError"`
+	Duration  float64    `json:"duration"`
+	StartedAt string     `json:"startedAt"`
 }
 
 type TestCounts struct {

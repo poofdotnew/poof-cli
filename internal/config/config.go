@@ -22,7 +22,7 @@ type Config struct {
 // Load reads configuration from flags, env vars, .env, and ~/.poof/config.yaml.
 func Load() (*Config, error) {
 	// Load .env from current directory (ignore if missing)
-	godotenv.Load()
+	_ = godotenv.Load()
 
 	v := viper.New()
 	v.SetConfigName("config")

@@ -29,7 +29,7 @@ func GetFormat() Format { return currentFormat }
 func JSON(data interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	enc.Encode(data)
+	_ = enc.Encode(data)
 }
 
 // Success prints a success message in green.

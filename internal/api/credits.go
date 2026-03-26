@@ -37,12 +37,12 @@ type TopupRequest struct {
 }
 
 type PaymentRequirements struct {
-	X402Version int              `json:"x402Version"`
-	Accepts     []PaymentAccept  `json:"accepts"`
-	PriceUsd    float64          `json:"priceUsd"`
-	PriceUsdc   string           `json:"priceUsdc"`
-	Credits     int              `json:"credits"`
-	Quantity    int              `json:"quantity"`
+	X402Version int             `json:"x402Version"`
+	Accepts     []PaymentAccept `json:"accepts"`
+	PriceUsd    float64         `json:"priceUsd"`
+	PriceUsdc   string          `json:"priceUsdc"`
+	Credits     int             `json:"credits"`
+	Quantity    int             `json:"quantity"`
 }
 
 type PaymentAccept struct {
@@ -59,9 +59,9 @@ type PaymentExtra struct {
 }
 
 type TopupResult struct {
-	Credits  int    `json:"credits"`
+	Credits  int     `json:"credits"`
 	PriceUsd float64 `json:"priceUsd"`
-	TxID     string `json:"txId"`
+	TxID     string  `json:"txId"`
 }
 
 func (c *Client) GetCredits(ctx context.Context) (*CreditsResponse, error) {

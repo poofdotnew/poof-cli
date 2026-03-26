@@ -40,3 +40,15 @@ changelog:
       - "^docs:"
       - "^test:"
       - "^ci:"
+
+brews:
+  - repository:
+      owner: poofdotnew
+      name: homebrew-tap
+    homepage: https://poof.new
+    description: "Build, deploy, and manage Solana dApps on poof.new"
+    license: MIT
+    install: |
+      bin.install "poof"
+    test: |
+      system "#{bin}/poof", "version"

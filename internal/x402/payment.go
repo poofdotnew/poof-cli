@@ -59,7 +59,11 @@ func BuildPayment(
 		return "", fmt.Errorf("invalid private key length: %d", len(secretBytes))
 	}
 	privKey := ed25519.NewKeyFromSeed(secretBytes[:32])
-	walletPubkey := solana.PublicKeyFromBytes(privKey.Public().(ed25519.PublicKey))
+	pubKey, ok := privKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("unexpected public key type")
+	}
+	walletPubkey := solana.PublicKeyFromBytes(pubKey)
 
 	// Parse amount (already in USDC atomic units)
 	amount, err := strconv.ParseUint(accept.Amount, 10, 64)

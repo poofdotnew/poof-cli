@@ -49,7 +49,10 @@ func LoadKeypair(secret string) (*Keypair, error) {
 	// First 32 bytes = seed, last 32 bytes = public key
 	seed := secretBytes[:32]
 	privateKey := ed25519.NewKeyFromSeed(seed)
-	publicKey := privateKey.Public().(ed25519.PublicKey)
+	publicKey, ok := privateKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unexpected public key type")
+	}
 	address := base58.Encode(publicKey)
 
 	return &Keypair{

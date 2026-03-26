@@ -15,8 +15,8 @@ var secretsCmd = &cobra.Command{
 }
 
 var secretsGetCmd = &cobra.Command{
-	Use:   "get",
-	Short: "Get secret names and requirements",
+	Use:     "get",
+	Short:   "Get secret names and requirements",
 	Example: `  poof secrets get -p <id>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -53,7 +53,7 @@ var secretsSetCmd = &cobra.Command{
 	Short: "Set secret values",
 	Example: `  poof secrets set -p <id> API_KEY=sk-123 DB_URL=postgres://...
   poof secrets set -p <id> --environment preview API_KEY=sk-456`,
-	Args:  cobra.MinimumNArgs(1),
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
