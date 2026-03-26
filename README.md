@@ -1,3 +1,14 @@
+<p align="center">
+  <img src="assets/banner.svg" alt="poof CLI" width="900"/>
+</p>
+
+<p align="center">
+  <a href="https://github.com/poofdotnew/poof-cli/releases/latest"><img src="https://img.shields.io/github/v/release/poofdotnew/poof-cli?color=14F195&style=flat-square" alt="Release"></a>
+  <a href="https://github.com/poofdotnew/poof-cli/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/poofdotnew/poof-cli/ci.yml?branch=main&style=flat-square" alt="CI"></a>
+  <a href="https://github.com/poofdotnew/poof-cli/blob/main/LICENSE"><img src="https://img.shields.io/github/license/poofdotnew/poof-cli?color=9945FF&style=flat-square" alt="License"></a>
+  <a href="https://goreportcard.com/report/github.com/poofdotnew/poof-cli"><img src="https://goreportcard.com/badge/github.com/poofdotnew/poof-cli?style=flat-square" alt="Go Report Card"></a>
+</p>
+
 # poof
 
 A command-line tool for building, deploying, and managing Solana dApps on [poof.new](https://poof.new).
@@ -237,6 +248,13 @@ poof auth status           # check token validity
 poof auth logout           # clear cached credentials
 ```
 
+### Browser
+
+```bash
+poof browser               # generate a sign-in link for poof.new using your CLI session
+poof browser --env staging # sign-in link for staging
+```
+
 ### Utilities
 
 ```bash
@@ -244,6 +262,15 @@ poof keygen                # generate a new Solana keypair
 poof config show           # show current configuration
 poof config set <key> <val>  # set a config value
 poof version               # show version, commit, build date
+```
+
+### Shell Completion
+
+```bash
+poof completion bash       # generate bash completion script
+poof completion zsh        # generate zsh completion script
+poof completion fish       # generate fish completion script
+poof completion powershell # generate PowerShell completion script
 ```
 
 ## Global Flags
@@ -373,7 +400,7 @@ make install        # install to $GOPATH/bin
 
 ### Prerequisites
 
-- **Go 1.22+**
+- **Go 1.26+**
 - **[golangci-lint](https://golangci-lint.run/welcome/install/)** for `make lint`:
   ```bash
   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest

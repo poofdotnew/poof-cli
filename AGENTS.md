@@ -44,6 +44,10 @@ cmd/poof/main.go  ->  internal/cli/  ->  internal/api/  ->  poof.new REST API
 - Tests use `mockAuthProvider` and `httptest.NewServer` — see `internal/api/client_test.go` for the pattern
 - No CGO (`CGO_ENABLED=0`)
 
+## README sync rule
+
+When you add, rename, remove, or change commands/flags, update the command reference in `README.md` in the same commit. The README is user-facing docs — it must always match the actual CLI.
+
 ## What not to do
 
 - Don't add dependencies without a strong reason

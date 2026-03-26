@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 280" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="900" y2="280" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0f0f23"/>
+      <stop offset="50%" stop-color="#1a1a3e"/>
+      <stop offset="100%" stop-color="#0f0f23"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#9945FF"/>
+      <stop offset="100%" stop-color="#14F195"/>
+    </linearGradient>
+    <linearGradient id="text-grad" x1="0" y1="0" x2="400" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#9945FF"/>
+      <stop offset="100%" stop-color="#14F195"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="900" height="280" rx="12" fill="url(#bg)"/>
+
+  <!-- Decorative grid dots -->
+  <g opacity="0.08" fill="white">
+    <circle cx="50" cy="50" r="1.5"/>
+    <circle cx="100" cy="50" r="1.5"/>
+    <circle cx="150" cy="50" r="1.5"/>
+    <circle cx="200" cy="50" r="1.5"/>
+    <circle cx="250" cy="50" r="1.5"/>
+    <circle cx="50" cy="100" r="1.5"/>
+    <circle cx="100" cy="100" r="1.5"/>
+    <circle cx="150" cy="100" r="1.5"/>
+    <circle cx="200" cy="100" r="1.5"/>
+    <circle cx="250" cy="100" r="1.5"/>
+    <circle cx="650" cy="180" r="1.5"/>
+    <circle cx="700" cy="180" r="1.5"/>
+    <circle cx="750" cy="180" r="1.5"/>
+    <circle cx="800" cy="180" r="1.5"/>
+    <circle cx="850" cy="180" r="1.5"/>
+    <circle cx="650" cy="230" r="1.5"/>
+    <circle cx="700" cy="230" r="1.5"/>
+    <circle cx="750" cy="230" r="1.5"/>
+    <circle cx="800" cy="230" r="1.5"/>
+    <circle cx="850" cy="230" r="1.5"/>
+  </g>
+
+  <!-- Poof cloud icon -->
+  <g transform="translate(310, 55)" filter="url(#glow)">
+    <path d="M40 65c-16.5 0-30-12.5-30-28s13.5-28 30-28c2 0 4 0.2 5.8 0.6C50.5 3.8 58 0 66.5 0c13 0 23.5 10 24.8 22.6C99.5 26.3 106 35 106 45c0 11-9 20-20 20H40z" fill="url(#accent)" opacity="0.9"/>
+    <text x="53" y="48" text-anchor="middle" font-family="monospace" font-size="28" font-weight="bold" fill="white">*</text>
+  </g>
+
+  <!-- Title -->
+  <text x="450" y="155" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="56" font-weight="800" fill="url(#text-grad)" letter-spacing="-1">poof</text>
+
+  <!-- Subtitle -->
+  <text x="450" y="190" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#8888aa" letter-spacing="2">BUILD, DEPLOY &amp; MANAGE SOLANA dAPPS FROM YOUR TERMINAL</text>
+
+  <!-- Terminal prompt -->
+  <g transform="translate(280, 215)">
+    <rect width="340" height="36" rx="8" fill="#1e1e3a" stroke="#333366" stroke-width="1"/>
+    <text x="16" y="24" font-family="'SF Mono', 'Fira Code', monospace" font-size="14" fill="#14F195">$</text>
+    <text x="32" y="24" font-family="'SF Mono', 'Fira Code', monospace" font-size="14" fill="#ccccdd">brew install poofdotnew/tap/poof</text>
+  </g>
+</svg>

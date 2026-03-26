@@ -54,12 +54,23 @@ internal/
 3. Call `requireAuth()` in `RunE` if the command needs the API
 4. Use `getProjectID()` for commands that operate on a project
 5. Use `output.Print()` for output formatting support
+6. **Update `README.md`** — add the command to the command reference section with usage and examples
 
 ## Adding a new API endpoint
 
 1. Add the method to `internal/api/endpoints.go` on the `*Client` struct
 2. Use `c.Do()` for standard requests, `c.DoRaw()` for non-2xx protocol responses (e.g. 402)
 3. Define request/response structs in the same file
+
+## README sync rule
+
+**When commands change, the README must be updated in the same commit.** This includes:
+- Adding a new command or subcommand
+- Renaming or removing a command
+- Changing a command's flags, arguments, or behavior
+- Changing global flags or output formats
+
+The README command reference section is the user-facing documentation. It must always reflect the current CLI surface. Run `./bin/poof <command> --help` to get the exact usage text if needed.
 
 ## Things to avoid
 
