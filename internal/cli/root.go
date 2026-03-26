@@ -77,6 +77,7 @@ func init() {
 	rootCmd.AddCommand(keygenCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(browserCmd)
 }
 
 // Execute runs the root command.
