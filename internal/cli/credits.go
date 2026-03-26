@@ -77,8 +77,14 @@ A completed purchase also unlocks paid features (deployment, downloads, etc.).`,
 			return handleError(err)
 		}
 
+		if len(reqs.Accepts) == 0 {
+			return fmt.Errorf("server returned no payment methods")
+		}
 		accept := reqs.Accepts[0]
-		amountUsdc, _ := strconv.ParseFloat(accept.Amount, 64)
+		amountUsdc, err := strconv.ParseFloat(accept.Amount, 64)
+		if err != nil {
+			return fmt.Errorf("invalid payment amount %q: %w", accept.Amount, err)
+		}
 		amountUsdc /= 1e6 // Convert atomic units to USDC
 
 		output.Info("Payment required:")
@@ -120,9 +126,9 @@ A completed purchase also unlocks paid features (deployment, downloads, etc.).`,
 	},
 }
 
-// getRecentBlockhash fetches the latest blockhash from Solana mainnet RPC.
+// getRecentBlockhash fetches the latest blockhash from Solana RPC.
 func getRecentBlockhash(ctx context.Context) (string, error) {
-	rpcURL := "https://api.mainnet-beta.solana.com"
+	rpcURL := cfg.SolanaRPCURL
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"getLatestBlockhash","params":[{"commitment":"finalized"}]}`
 
@@ -138,16 +144,28 @@ func getRecentBlockhash(ctx context.Context) (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("Solana RPC returned status %d", resp.StatusCode)
+	}
+
 	var rpcResp struct {
 		Result struct {
 			Value struct {
 				Blockhash string `json:"blockhash"`
 			} `json:"value"`
 		} `json:"result"`
+		Error *struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&rpcResp); err != nil {
 		return "", err
+	}
+
+	if rpcResp.Error != nil {
+		return "", fmt.Errorf("Solana RPC error %d: %s", rpcResp.Error.Code, rpcResp.Error.Message)
 	}
 
 	if rpcResp.Result.Value.Blockhash == "" {

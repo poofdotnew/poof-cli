@@ -61,6 +61,9 @@ var preferencesSetCmd = &cobra.Command{
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid format %q — use KEY=VALUE (e.g., mainChat=genius)", arg)
 			}
+			if parts[0] == "" {
+				return fmt.Errorf("key cannot be empty in %q", arg)
+			}
 			tier := parts[1]
 			if tier != "average" && tier != "smart" && tier != "genius" {
 				return fmt.Errorf("invalid tier %q — use average, smart, or genius", tier)

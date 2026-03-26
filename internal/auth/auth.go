@@ -113,11 +113,3 @@ func (m *Manager) InvalidateToken() {
 func (m *Manager) WalletAddress() string {
 	return m.wallet
 }
-
-// Logout clears all cached tokens.
-func (m *Manager) Logout() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.session = nil
-	return ClearCachedTokens()
-}

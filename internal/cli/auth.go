@@ -24,12 +24,10 @@ var authLoginCmd = &cobra.Command{
 			return err
 		}
 
-		token, err := authMgr.Login()
+		_, err := authMgr.Login()
 		if err != nil {
 			return fmt.Errorf("login failed: %w", err)
 		}
-
-		_ = token // token is cached; don't print it
 		output.Print(map[string]string{
 			"wallet": authMgr.WalletAddress(),
 			"env":    cfg.PoofEnv,
@@ -83,9 +81,7 @@ var authLogoutCmd = &cobra.Command{
 	Short: "Clear cached credentials",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := auth.ClearCachedTokens(); err != nil {
-			// If the file doesn't exist, that's fine
-			output.Info("No cached credentials to clear.")
-			return nil
+			return fmt.Errorf("failed to clear credentials: %w", err)
 		}
 		output.Success("Logged out. Cached credentials cleared.")
 		return nil

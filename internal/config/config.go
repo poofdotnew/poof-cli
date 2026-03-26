@@ -17,6 +17,7 @@ type Config struct {
 	BypassToken      string
 	OutputFormat     string // "text", "json", "quiet"
 	DefaultProject   string
+	SolanaRPCURL     string
 }
 
 // Load reads configuration from flags, env vars, .env, and ~/.poof/config.yaml.
@@ -45,6 +46,7 @@ func Load() (*Config, error) {
 		BypassToken:      coalesce(v.GetString("VERCEL_BYPASS_TOKEN"), os.Getenv("VERCEL_BYPASS_TOKEN")),
 		OutputFormat:     coalesce(v.GetString("OUTPUT_FORMAT"), "text"),
 		DefaultProject:   v.GetString("default_project_id"),
+		SolanaRPCURL:     coalesce(v.GetString("SOLANA_RPC_URL"), os.Getenv("SOLANA_RPC_URL"), "https://api.mainnet-beta.solana.com"),
 	}
 
 	return cfg, nil

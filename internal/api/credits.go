@@ -1,11 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 )
 
@@ -80,35 +78,14 @@ func (c *Client) GetCredits(ctx context.Context) (*CreditsResponse, error) {
 // TopupPhase1 sends the initial topup request (no payment).
 // The server responds with 402 containing payment requirements.
 func (c *Client) TopupPhase1(ctx context.Context, quantity int) (*PaymentRequirements, error) {
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return nil, fmt.Errorf("auth failed: %w", err)
-	}
-
-	reqBody, _ := json.Marshal(TopupRequest{Quantity: quantity})
-
-	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/api/credits/topup", bytes.NewReader(reqBody))
+	body, statusCode, err := c.DoRaw(ctx, "POST", "/api/credits/topup", TopupRequest{Quantity: quantity}, nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-Wallet-Address", c.AuthManager.WalletAddress())
-	req.Header.Set("Content-Type", "application/json")
-	if c.BypassToken != "" {
-		req.Header.Set("x-vercel-protection-bypass", c.BypassToken)
-	}
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	// Expect 402 with payment requirements
-	if resp.StatusCode != http.StatusPaymentRequired && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+	// Expect 402 with payment requirements (or 200 if already paid)
+	if statusCode != http.StatusPaymentRequired && statusCode != http.StatusOK {
+		return nil, parseAPIError(body, statusCode)
 	}
 
 	var reqs PaymentRequirements
@@ -125,35 +102,14 @@ func (c *Client) TopupPhase1(ctx context.Context, quantity int) (*PaymentRequire
 
 // TopupPhase2 sends the payment header to complete the purchase.
 func (c *Client) TopupPhase2(ctx context.Context, quantity int, paymentHeader string) (*TopupResult, error) {
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return nil, fmt.Errorf("auth failed: %w", err)
-	}
-
-	reqBody, _ := json.Marshal(TopupRequest{Quantity: quantity})
-
-	req, err := http.NewRequestWithContext(ctx, "POST", c.BaseURL+"/api/credits/topup", bytes.NewReader(reqBody))
+	headers := map[string]string{"X-PAYMENT": paymentHeader}
+	body, statusCode, err := c.DoRaw(ctx, "POST", "/api/credits/topup", TopupRequest{Quantity: quantity}, headers)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
-	req.Header.Set("X-Wallet-Address", c.AuthManager.WalletAddress())
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-PAYMENT", paymentHeader)
-	if c.BypassToken != "" {
-		req.Header.Set("x-vercel-protection-bypass", c.BypassToken)
-	}
 
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	body, _ := io.ReadAll(resp.Body)
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("payment failed (%d): %s", resp.StatusCode, string(body))
+	if statusCode != http.StatusOK {
+		return nil, fmt.Errorf("payment failed (%d): %s", statusCode, string(body))
 	}
 
 	var result TopupResult

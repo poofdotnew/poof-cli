@@ -39,16 +39,16 @@ func (c *Client) GetDomains(ctx context.Context, projectID string) (*DomainsResp
 func (c *Client) AddDomain(ctx context.Context, projectID, domain string, isDefault bool) error {
 	path := fmt.Sprintf("/api/project/%s/domains", projectID)
 
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return err
-	}
-
-	req := AddDomainRequest{
-		Domain:        domain,
-		IsDefault:     isDefault,
-		TarobaseToken: token,
-	}
-	_, err = c.Do(ctx, "POST", path, req)
+	_, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return AddDomainRequest{
+			Domain:        domain,
+			IsDefault:     isDefault,
+			TarobaseToken: token,
+		}, nil
+	})
 	return err
 }

@@ -30,7 +30,10 @@ type nonceResponse struct {
 
 // FetchNonce gets a nonce from the auth server.
 func (sc *SessionClient) FetchNonce() (string, error) {
-	body, _ := json.Marshal(map[string]string{"appId": sc.AppID})
+	body, err := json.Marshal(map[string]string{"appId": sc.AppID})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal nonce request: %w", err)
+	}
 
 	resp, err := sc.HTTPClient.Post(sc.AuthURL+"/auth/nonce", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -57,13 +60,16 @@ func (sc *SessionClient) CreateSession(kp *Keypair, nonce string) (*Session, err
 	signature := kp.Sign([]byte(message))
 	sig64 := base64.StdEncoding.EncodeToString(signature)
 
-	reqBody, _ := json.Marshal(map[string]string{
+	reqBody, err := json.Marshal(map[string]string{
 		"appId":      sc.AppID,
 		"address":    kp.Address,
 		"message":    message,
 		"signature":  sig64,
 		"authMethod": "phantom",
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal session request: %w", err)
+	}
 
 	resp, err := sc.HTTPClient.Post(sc.AuthURL+"/session", "application/json", bytes.NewReader(reqBody))
 	if err != nil {
@@ -86,10 +92,13 @@ func (sc *SessionClient) CreateSession(kp *Keypair, nonce string) (*Session, err
 
 // RefreshSession refreshes tokens using a refresh token.
 func (sc *SessionClient) RefreshSession(refreshToken string) (*Session, error) {
-	reqBody, _ := json.Marshal(map[string]string{
+	reqBody, err := json.Marshal(map[string]string{
 		"refreshToken": refreshToken,
 		"appId":        sc.AppID,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal refresh request: %w", err)
+	}
 
 	resp, err := sc.HTTPClient.Post(sc.AuthURL+"/session/refresh", "application/json", bytes.NewReader(reqBody))
 	if err != nil {

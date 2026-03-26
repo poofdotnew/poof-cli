@@ -47,8 +47,14 @@ func BuildPayment(
 	accept := reqs.Accepts[0]
 
 	// Parse addresses
-	facilitatorPubkey := solana.MustPublicKeyFromBase58(accept.Extra.FeePayer)
-	treasuryPubkey := solana.MustPublicKeyFromBase58(accept.PayTo)
+	facilitatorPubkey, err := solana.PublicKeyFromBase58(accept.Extra.FeePayer)
+	if err != nil {
+		return "", fmt.Errorf("invalid facilitator address %q: %w", accept.Extra.FeePayer, err)
+	}
+	treasuryPubkey, err := solana.PublicKeyFromBase58(accept.PayTo)
+	if err != nil {
+		return "", fmt.Errorf("invalid treasury address %q: %w", accept.PayTo, err)
+	}
 
 	// Load keypair
 	secretBytes, err := base58.Decode(privateKeyBase58)
@@ -100,6 +106,11 @@ func BuildPayment(
 	// 1. SetComputeUnitLimit (≤50000)
 	// 2. SetComputeUnitPrice
 	// 3. TransferChecked (USDC)
+	recentHash, err := solana.HashFromBase58(recentBlockhash)
+	if err != nil {
+		return "", fmt.Errorf("invalid blockhash %q: %w", recentBlockhash, err)
+	}
+
 	tx, err := solana.NewTransaction(
 		[]solana.Instruction{
 			newSetComputeUnitLimitInstruction(50000),
@@ -113,7 +124,7 @@ func BuildPayment(
 				6, // USDC decimals
 			),
 		},
-		solana.MustHashFromBase58(recentBlockhash),
+		recentHash,
 		solana.TransactionPayer(facilitatorPubkey),
 	)
 	if err != nil {

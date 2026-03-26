@@ -9,6 +9,7 @@ import (
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var projectCmd = &cobra.Command{
@@ -234,14 +235,19 @@ var projectMessagesCmd = &cobra.Command{
 }
 
 func truncate(s string, max int) string {
-	if len(s) <= max {
+	runes := []rune(s)
+	if len(runes) <= max {
 		return s
 	}
-	return s[:max] + "..."
+	return string(runes[:max]) + "..."
 }
 
 // readStdin reads all of stdin into a string (for piped input).
+// Returns empty string if stdin is a terminal (not piped).
 func readStdin() string {
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		return ""
+	}
 	scanner := bufio.NewScanner(os.Stdin)
 	var result string
 	for scanner.Scan() {
@@ -249,6 +255,10 @@ func readStdin() string {
 			result += "\n"
 		}
 		result += scanner.Text()
+	}
+	if scanner.Err() != nil {
+		fmt.Fprintf(os.Stderr, "Warning: error reading stdin: %v\n", scanner.Err())
+		return ""
 	}
 	return result
 }

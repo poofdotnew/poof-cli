@@ -32,18 +32,17 @@ type SteerRequest struct {
 func (c *Client) Chat(ctx context.Context, projectID, message string) (*ChatResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/chat", projectID)
 
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return nil, err
-	}
-
-	req := ChatRequest{
-		Message:       message,
-		MessageID:     uuid.New().String(),
-		TarobaseToken: token,
-	}
-
-	body, err := c.Do(ctx, "POST", path, req)
+	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return ChatRequest{
+			Message:       message,
+			MessageID:     uuid.New().String(),
+			TarobaseToken: token,
+		}, nil
+	})
 	if err != nil {
 		return nil, err
 	}

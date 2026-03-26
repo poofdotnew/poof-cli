@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/auth"
@@ -112,13 +113,17 @@ func requireAuth() error {
 
 // getProjectID returns the project ID from flag, config, or error.
 func getProjectID() (string, error) {
-	if flagProject != "" {
-		return flagProject, nil
+	id := flagProject
+	if id == "" {
+		id = cfg.DefaultProject
 	}
-	if cfg.DefaultProject != "" {
-		return cfg.DefaultProject, nil
+	if id == "" {
+		return "", fmt.Errorf("project ID required: use --project flag or set default_project_id in ~/.poof/config.yaml")
 	}
-	return "", fmt.Errorf("project ID required: use --project flag or set default_project_id in ~/.poof/config.yaml")
+	if strings.Contains(id, "/") || strings.Contains(id, "..") {
+		return "", fmt.Errorf("invalid project ID: %q", id)
+	}
+	return id, nil
 }
 
 // handleError formats an API error with context-aware messaging and returns it.

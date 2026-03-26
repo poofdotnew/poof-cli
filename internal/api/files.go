@@ -32,15 +32,15 @@ func (c *Client) GetFiles(ctx context.Context, projectID string) (*FilesResponse
 func (c *Client) UpdateFiles(ctx context.Context, projectID string, files map[string]string) error {
 	path := fmt.Sprintf("/api/project/%s/files/update", projectID)
 
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return err
-	}
-
-	req := UpdateFilesRequest{
-		Files:         files,
-		TarobaseToken: token,
-	}
-	_, err = c.Do(ctx, "POST", path, req)
+	_, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return UpdateFilesRequest{
+			Files:         files,
+			TarobaseToken: token,
+		}, nil
+	})
 	return err
 }

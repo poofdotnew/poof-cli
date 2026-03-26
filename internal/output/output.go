@@ -29,7 +29,9 @@ func GetFormat() Format { return currentFormat }
 func JSON(data interface{}) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
-	_ = enc.Encode(data)
+	if err := enc.Encode(data); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to encode JSON: %v\n", err)
+	}
 }
 
 // Success prints a success message in green.
@@ -53,7 +55,7 @@ func Info(msg string, args ...interface{}) {
 	fmt.Printf(msg+"\n", args...)
 }
 
-// Quiet prints only when not in quiet mode, or always for essential values.
+// Quiet always prints the given value, used for essential output in all modes.
 func Quiet(val string) {
 	fmt.Println(val)
 }

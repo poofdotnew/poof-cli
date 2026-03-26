@@ -79,14 +79,14 @@ func (c *Client) CreateProject(ctx context.Context, req CreateProjectRequest) (*
 	projectID := uuid.New().String()
 	path := fmt.Sprintf("/api/project/%s", projectID)
 
-	// Get fresh token for tarobaseToken field
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return nil, err
-	}
-	req.TarobaseToken = token
-
-	body, err := c.Do(ctx, "POST", path, req)
+	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		req.TarobaseToken = token
+		return req, nil
+	})
 	if err != nil {
 		return nil, err
 	}

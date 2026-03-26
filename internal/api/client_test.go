@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 )
@@ -433,7 +434,7 @@ func TestDoRequest_BodyMarshalingAndHeaders(t *testing.T) {
 	client := newTestClient(srv.URL, auth)
 
 	payload := reqPayload{Key: "foo", Value: 42}
-	respBody, statusCode, err := client.doRequest(context.Background(), http.MethodPost, "/data", payload)
+	respBody, statusCode, err := client.doRequest(context.Background(), http.MethodPost, "/data", payload, nil)
 	if err != nil {
 		t.Fatalf("doRequest() returned unexpected error: %v", err)
 	}
@@ -482,7 +483,7 @@ func TestDoRequest_NilBody(t *testing.T) {
 	auth := &mockAuthProvider{token: "token", walletAddress: "wallet"}
 	client := newTestClient(srv.URL, auth)
 
-	_, statusCode, err := client.doRequest(context.Background(), http.MethodGet, "/nodata", nil)
+	_, statusCode, err := client.doRequest(context.Background(), http.MethodGet, "/nodata", nil, nil)
 	if err != nil {
 		t.Fatalf("doRequest() returned unexpected error: %v", err)
 	}
@@ -513,7 +514,7 @@ func TestDoRequest_BypassToken(t *testing.T) {
 	client := newTestClient(srv.URL, auth)
 	client.BypassToken = "my-bypass-token"
 
-	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/protected", nil)
+	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/protected", nil, nil)
 	if err != nil {
 		t.Fatalf("doRequest() returned unexpected error: %v", err)
 	}
@@ -538,7 +539,7 @@ func TestDoRequest_NoBypassTokenWhenEmpty(t *testing.T) {
 	client := newTestClient(srv.URL, auth)
 	// BypassToken is empty (zero value)
 
-	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/open", nil)
+	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/open", nil, nil)
 	if err != nil {
 		t.Fatalf("doRequest() returned unexpected error: %v", err)
 	}
@@ -561,7 +562,7 @@ func TestDoRequest_AuthFailure(t *testing.T) {
 		HTTPClient:  &http.Client{},
 	}
 
-	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/test", nil)
+	_, _, err := client.doRequest(context.Background(), http.MethodGet, "/test", nil, nil)
 	if err == nil {
 		t.Fatal("doRequest() should fail when GetToken returns an error")
 	}
@@ -580,7 +581,7 @@ func TestDoRequest_UnmarshalableBody(t *testing.T) {
 
 	// Channels cannot be marshaled to JSON.
 	unmarshalable := make(chan int)
-	_, _, err := client.doRequest(context.Background(), http.MethodPost, "/test", unmarshalable)
+	_, _, err := client.doRequest(context.Background(), http.MethodPost, "/test", unmarshalable, nil)
 	if err == nil {
 		t.Fatal("doRequest() should fail when body cannot be marshaled")
 	}
@@ -602,7 +603,7 @@ func TestDoRequest_ContextCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // cancel before the request
 
-	_, _, err := client.doRequest(ctx, http.MethodGet, "/test", nil)
+	_, _, err := client.doRequest(ctx, http.MethodGet, "/test", nil, nil)
 	if err == nil {
 		t.Fatal("doRequest() should fail with canceled context")
 	}
@@ -627,7 +628,7 @@ func TestDoRequest_MethodAndPath(t *testing.T) {
 
 	methods := []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodPatch}
 	for _, method := range methods {
-		_, _, err := client.doRequest(context.Background(), method, "/api/test", nil)
+		_, _, err := client.doRequest(context.Background(), method, "/api/test", nil, nil)
 		if err != nil {
 			t.Fatalf("doRequest(%s) returned unexpected error: %v", method, err)
 		}
@@ -647,10 +648,13 @@ func TestDoRequest_MethodAndPath(t *testing.T) {
 func TestDo_401RetryWithNewToken(t *testing.T) {
 	// Verify that after InvalidateToken, the retry uses a fresh token.
 	var callCount atomic.Int32
+	var mu sync.Mutex
 	var receivedTokens []string
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
 		receivedTokens = append(receivedTokens, r.Header.Get("Authorization"))
+		mu.Unlock()
 		n := callCount.Add(1)
 		if n == 1 {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -680,6 +684,8 @@ func TestDo_401RetryWithNewToken(t *testing.T) {
 		t.Fatalf("Do() returned unexpected error: %v", err)
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
 	if len(receivedTokens) != 2 {
 		t.Fatalf("expected 2 requests, got %d", len(receivedTokens))
 	}

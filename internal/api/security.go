@@ -35,12 +35,13 @@ type ScanSummary struct {
 func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityScanResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/security-scan", projectID)
 
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return nil, err
-	}
-
-	body, err := c.Do(ctx, "POST", path, SecurityScanRequest{TarobaseToken: token})
+	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return SecurityScanRequest{TarobaseToken: token}, nil
+	})
 	if err != nil {
 		return nil, err
 	}

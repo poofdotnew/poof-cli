@@ -70,6 +70,9 @@ var secretsSetCmd = &cobra.Command{
 			if len(parts) != 2 {
 				return fmt.Errorf("invalid format %q — use KEY=VALUE", arg)
 			}
+			if parts[0] == "" {
+				return fmt.Errorf("key cannot be empty in %q", arg)
+			}
 			secrets[parts[0]] = parts[1]
 		}
 

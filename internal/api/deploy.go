@@ -54,12 +54,13 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string) e
 		return fmt.Errorf("invalid target %q (valid: preview, production, mobile)", target)
 	}
 
-	token, err := c.AuthManager.GetToken()
-	if err != nil {
-		return err
-	}
-
-	_, err = c.Do(ctx, "POST", path, PublishRequest{AuthToken: token})
+	_, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return PublishRequest{AuthToken: token}, nil
+	})
 	return err
 }
 

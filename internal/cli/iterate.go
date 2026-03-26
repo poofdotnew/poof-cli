@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/spf13/cobra"
@@ -68,12 +69,14 @@ var iterateCmd = &cobra.Command{
 			return fmt.Errorf("timed out or failed: %w", err)
 		}
 
-		// 3. Check test results
+		// 3. Check test results (may not exist for all projects)
 		results, err := apiClient.GetTestResults(ctx, projectID)
 		if err != nil {
-			// Test results may not exist; that's OK
-			output.Success("Done.")
-			return nil
+			if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
+				output.Success("Done.")
+				return nil
+			}
+			return handleError(err)
 		}
 
 		output.Print(results, func() {

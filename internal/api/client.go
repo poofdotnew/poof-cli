@@ -45,7 +45,7 @@ func NewClient(cfg *config.Config, authMgr *auth.Manager) (*Client, error) {
 
 // Do executes an API request with auth headers and automatic 401 retry.
 func (c *Client) Do(ctx context.Context, method, path string, body interface{}) ([]byte, error) {
-	respBody, statusCode, err := c.doRequest(ctx, method, path, body)
+	respBody, statusCode, err := c.doRequest(ctx, method, path, body, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +53,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body interface{}) 
 	// Auto-retry on 401
 	if statusCode == http.StatusUnauthorized {
 		c.AuthManager.InvalidateToken()
-		respBody, statusCode, err = c.doRequest(ctx, method, path, body)
+		respBody, statusCode, err = c.doRequest(ctx, method, path, body, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +66,28 @@ func (c *Client) Do(ctx context.Context, method, path string, body interface{}) 
 	return respBody, nil
 }
 
-func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}) ([]byte, int, error) {
+// DoRaw executes a request with auth and 401 retry, returning the raw
+// response body and status code without treating status >= 400 as errors.
+// Use this for endpoints that return non-2xx codes as part of their protocol (e.g. 402).
+func (c *Client) DoRaw(ctx context.Context, method, path string, body interface{}, extraHeaders map[string]string) ([]byte, int, error) {
+	respBody, statusCode, err := c.doRequest(ctx, method, path, body, extraHeaders)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Auto-retry on 401
+	if statusCode == http.StatusUnauthorized {
+		c.AuthManager.InvalidateToken()
+		respBody, statusCode, err = c.doRequest(ctx, method, path, body, extraHeaders)
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return respBody, statusCode, nil
+}
+
+func (c *Client) doRequest(ctx context.Context, method, path string, body interface{}, extraHeaders map[string]string) ([]byte, int, error) {
 	token, err := c.AuthManager.GetToken()
 	if err != nil {
 		return nil, 0, fmt.Errorf("auth failed: %w", err)
@@ -94,6 +115,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 		req.Header.Set("x-vercel-protection-bypass", c.BypassToken)
 	}
 
+	for k, v := range extraHeaders {
+		req.Header.Set(k, v)
+	}
+
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("request failed: %w", err)
@@ -106,6 +131,40 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 	}
 
 	return respBody, resp.StatusCode, nil
+}
+
+// doWithTokenBody executes a request where the body includes a token field
+// (e.g. TarobaseToken). On 401 retry, the body is rebuilt with a fresh token
+// to avoid stale token mismatch between the Authorization header and body.
+func (c *Client) doWithTokenBody(ctx context.Context, method, path string, buildBody func() (interface{}, error)) ([]byte, error) {
+	body, err := buildBody()
+	if err != nil {
+		return nil, err
+	}
+
+	respBody, statusCode, err := c.doRequest(ctx, method, path, body, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-retry on 401 with a fresh body (new token)
+	if statusCode == http.StatusUnauthorized {
+		c.AuthManager.InvalidateToken()
+		body, err = buildBody()
+		if err != nil {
+			return nil, err
+		}
+		respBody, statusCode, err = c.doRequest(ctx, method, path, body, nil)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if statusCode >= 400 {
+		return nil, parseAPIError(respBody, statusCode)
+	}
+
+	return respBody, nil
 }
 
 func parseAPIError(body []byte, statusCode int) error {
