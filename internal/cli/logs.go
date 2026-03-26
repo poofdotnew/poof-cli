@@ -1,0 +1,51 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/poofdotnew/poof-cli/internal/output"
+	"github.com/spf13/cobra"
+)
+
+var logsCmd = &cobra.Command{
+	Use:   "logs",
+	Short: "Get runtime logs for a deployed project",
+	Example: `  poof logs -p <id>
+  poof logs -p <id> --environment preview --limit 50
+  poof logs -p <id> --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireAuth(); err != nil {
+			return err
+		}
+
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		environment, _ := cmd.Flags().GetString("environment")
+		limit, _ := cmd.Flags().GetInt("limit")
+
+		resp, err := apiClient.GetLogs(context.Background(), projectID, environment, limit)
+		if err != nil {
+			return handleError(err)
+		}
+
+		output.Print(resp, func() {
+			if len(resp.Logs) == 0 {
+				output.Info("No logs found.")
+				return
+			}
+			for _, l := range resp.Logs {
+				fmt.Printf("[%s] %s: %s\n", l.Timestamp, l.Level, l.Message)
+			}
+		})
+		return nil
+	},
+}
+
+func init() {
+	logsCmd.Flags().String("environment", "", "Filter by environment")
+	logsCmd.Flags().Int("limit", 100, "Max log entries")
+}

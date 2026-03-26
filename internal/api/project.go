@@ -1,0 +1,142 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+
+	"github.com/google/uuid"
+)
+
+// Project represents a Poof project.
+type Project struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Slug        string `json:"slug"`
+	IsPublic    bool   `json:"isPublic"`
+}
+
+type ListProjectsResponse struct {
+	Projects []Project `json:"projects"`
+}
+
+type CreateProjectRequest struct {
+	FirstMessage   string `json:"firstMessage"`
+	TarobaseToken  string `json:"tarobaseToken"`
+	IsPublic       bool   `json:"isPublic"`
+	GenerationMode string `json:"generationMode,omitempty"`
+}
+
+type CreateProjectResponse struct {
+	Success   bool   `json:"success"`
+	ProjectID string `json:"projectId"`
+	Message   string `json:"message"`
+}
+
+type UpdateProjectRequest struct {
+	Title          string `json:"title,omitempty"`
+	Description    string `json:"description,omitempty"`
+	Slug           string `json:"slug,omitempty"`
+	IsPublic       *bool  `json:"isPublic,omitempty"`
+	GenerationMode string `json:"generationMode,omitempty"`
+}
+
+type ProjectStatus struct {
+	Project      Project                `json:"project"`
+	LatestTask   map[string]interface{} `json:"latestTask"`
+	PublishState map[string]interface{} `json:"publishState"`
+	URLs         map[string]string      `json:"urls"`
+}
+
+type MessagesResponse struct {
+	Messages []Message `json:"messages"`
+}
+
+type Message struct {
+	ID        string `json:"id"`
+	Role      string `json:"role"`
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	Status    string `json:"status"`
+}
+
+func (c *Client) ListProjects(ctx context.Context, limit, offset int) (*ListProjectsResponse, error) {
+	path := fmt.Sprintf("/api/project?limit=%d&offset=%d", limit, offset)
+	body, err := c.Do(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ListProjectsResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &resp, nil
+}
+
+func (c *Client) CreateProject(ctx context.Context, req CreateProjectRequest) (*CreateProjectResponse, error) {
+	projectID := uuid.New().String()
+	path := fmt.Sprintf("/api/project/%s", projectID)
+
+	// Get fresh token for tarobaseToken field
+	token, err := c.AuthManager.GetToken()
+	if err != nil {
+		return nil, err
+	}
+	req.TarobaseToken = token
+
+	body, err := c.Do(ctx, "POST", path, req)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp CreateProjectResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if resp.ProjectID == "" {
+		resp.ProjectID = projectID
+	}
+	return &resp, nil
+}
+
+func (c *Client) UpdateProject(ctx context.Context, projectID string, req UpdateProjectRequest) error {
+	path := fmt.Sprintf("/api/project/%s", projectID)
+	_, err := c.Do(ctx, "PUT", path, req)
+	return err
+}
+
+func (c *Client) DeleteProject(ctx context.Context, projectID string) error {
+	path := fmt.Sprintf("/api/project/%s", projectID)
+	_, err := c.Do(ctx, "DELETE", path, nil)
+	return err
+}
+
+func (c *Client) GetProjectStatus(ctx context.Context, projectID string) (*ProjectStatus, error) {
+	path := fmt.Sprintf("/api/project/%s/status", projectID)
+	body, err := c.Do(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ProjectStatus
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &resp, nil
+}
+
+func (c *Client) GetMessages(ctx context.Context, projectID string) (*MessagesResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/messages", projectID)
+	body, err := c.Do(ctx, "GET", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp MessagesResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &resp, nil
+}
