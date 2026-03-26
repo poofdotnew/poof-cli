@@ -586,7 +586,7 @@ func TestSecurityScan_Success(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 		json.NewEncoder(w).Encode(SecurityScanResponse{
-			Status: "complete",
+			Status:  "complete",
 			Summary: ScanSummary{Total: 2, High: 1, Medium: 1},
 			Vulnerabilities: []Vulnerability{
 				{Severity: "high", Category: "xss", Description: "XSS in input"},
