@@ -52,8 +52,7 @@ var shipCmd = &cobra.Command{
 			return fmt.Errorf("security scan failed: %w", err)
 		}
 		if scanResult.Summary.Critical > 0 {
-			output.Error("Security scan found %d critical issue(s). Fix them before deploying.", scanResult.Summary.Critical)
-			return nil
+			return fmt.Errorf("security scan found %d critical issue(s) — fix them before deploying", scanResult.Summary.Critical)
 		}
 		output.Success("Security scan passed. (%d total, %d high, %d medium)",
 			scanResult.Summary.Total, scanResult.Summary.High, scanResult.Summary.Medium)
@@ -64,8 +63,7 @@ var shipCmd = &cobra.Command{
 			return handleError(err)
 		}
 		if !eligibility.Eligible {
-			output.Error("Not eligible for deployment: %s", eligibility.Reason)
-			return nil
+			return fmt.Errorf("not eligible for deployment: %s", eligibility.Reason)
 		}
 		output.Success("Eligible for deployment.")
 

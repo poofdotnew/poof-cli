@@ -65,8 +65,7 @@ var iterateCmd = &cobra.Command{
 			})
 		})
 		if err != nil {
-			output.Error("Timed out: %s", err)
-			return nil
+			return fmt.Errorf("timed out or failed: %w", err)
 		}
 
 		// 3. Check test results

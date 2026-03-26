@@ -62,7 +62,11 @@ func SaveCachedTokens(session *Session, wallet, env string) error {
 
 // ClearCachedTokens removes the token cache.
 func ClearCachedTokens() error {
-	return os.Remove(tokenCachePath())
+	err := os.Remove(tokenCachePath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
 }
 
 // IsValid returns true if the cached tokens are still usable.

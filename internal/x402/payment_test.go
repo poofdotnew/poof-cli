@@ -129,6 +129,22 @@ func TestBuildPayment_ShortKey(t *testing.T) {
 	}
 }
 
+func TestBuildPayment_EmptyAccepts(t *testing.T) {
+	privKey, _ := generateTestKeypair(t)
+
+	reqs := &api.PaymentRequirements{
+		Accepts: []api.PaymentAccept{},
+	}
+
+	_, err := BuildPayment(privKey, reqs, "EETubP5AKHgjPAhzPkYM9phZaEFgLuRwSzHpMqRmDVY7")
+	if err == nil {
+		t.Error("expected error for empty Accepts")
+	}
+	if !strings.Contains(err.Error(), "no payment methods") {
+		t.Errorf("expected 'no payment methods' in error, got: %v", err)
+	}
+}
+
 func TestBuildPayment_InvalidAmount(t *testing.T) {
 	privKey, _ := generateTestKeypair(t)
 	_, facilitatorPubkey := generateTestKeypair(t)

@@ -41,6 +41,9 @@ func BuildPayment(
 	reqs *api.PaymentRequirements,
 	recentBlockhash string,
 ) (string, error) {
+	if len(reqs.Accepts) == 0 {
+		return "", fmt.Errorf("no payment methods in response")
+	}
 	accept := reqs.Accepts[0]
 
 	// Parse addresses
@@ -127,7 +130,11 @@ func BuildPayment(
 		return "", fmt.Errorf("wallet %s not found in transaction signers", walletPubkey)
 	}
 	solanaPrivKey := solana.PrivateKey(privKey)
-	tx.Signatures[walletIdx] = signTransaction(tx, solanaPrivKey)
+	sig, err := signTransaction(tx, solanaPrivKey)
+	if err != nil {
+		return "", err
+	}
+	tx.Signatures[walletIdx] = sig
 
 	// Serialize with requireAllSignatures=false
 	txBytes, err := tx.MarshalBinary()
@@ -152,12 +159,15 @@ func BuildPayment(
 	return base64.StdEncoding.EncodeToString(payloadJSON), nil
 }
 
-func signTransaction(tx *solana.Transaction, privKey solana.PrivateKey) solana.Signature {
-	messageBytes, _ := tx.Message.MarshalBinary()
+func signTransaction(tx *solana.Transaction, privKey solana.PrivateKey) (solana.Signature, error) {
+	messageBytes, err := tx.Message.MarshalBinary()
+	if err != nil {
+		return solana.Signature{}, fmt.Errorf("failed to marshal transaction message: %w", err)
+	}
 	sig := ed25519.Sign(ed25519.PrivateKey(privKey), messageBytes)
 	var solSig solana.Signature
 	copy(solSig[:], sig)
-	return solSig
+	return solSig, nil
 }
 
 func findSignerIndex(tx *solana.Transaction, pubkey solana.PublicKey) int {

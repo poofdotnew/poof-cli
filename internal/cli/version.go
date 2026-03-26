@@ -13,7 +13,7 @@ var versionCmd = &cobra.Command{
 	Short: "Print version information",
 	Example: `  poof version
   poof version --json`,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		output.Print(map[string]string{
 			"version": version.Version,
 			"commit":  version.Commit,
@@ -21,5 +21,6 @@ var versionCmd = &cobra.Command{
 		}, func() {
 			fmt.Println(version.Info())
 		})
+		return nil
 	},
 }

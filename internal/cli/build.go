@@ -67,9 +67,8 @@ var buildCmd = &cobra.Command{
 			})
 		})
 		if err != nil {
-			output.Error("Build timed out or failed: %s", err)
 			output.Info("Project ID: %s (you can check status with 'poof project status -p %s')", projectID, projectID)
-			return nil
+			return fmt.Errorf("build timed out or failed: %w", err)
 		}
 
 		// 3. Get project status

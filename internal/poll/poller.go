@@ -55,7 +55,7 @@ func Poll(ctx context.Context, cfg Config, check CheckFunc) error {
 			if cfg.MaxConsecutiveErr > 0 && consecutiveErrs >= cfg.MaxConsecutiveErr {
 				return fmt.Errorf("polling failed after %d consecutive errors, last: %w", consecutiveErrs, lastErr)
 			}
-			delay = min(time.Duration(float64(delay)*2), cfg.MaxDelay)
+			delay = min(time.Duration(float64(delay)*cfg.BackoffFactor), cfg.MaxDelay)
 			continue
 		}
 		consecutiveErrs = 0

@@ -47,11 +47,7 @@ func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityS
 
 	var resp SecurityScanResponse
 	if err := json.Unmarshal(body, &resp); err != nil {
-		// If the response shape doesn't match our struct, return what we can
-		// The scan endpoint may return varying formats
-		return &SecurityScanResponse{
-			Status: string(body),
-		}, nil
+		return nil, fmt.Errorf("failed to parse security scan response: %w", err)
 	}
 	return &resp, nil
 }

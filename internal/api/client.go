@@ -12,10 +12,18 @@ import (
 	"github.com/poofdotnew/poof-cli/internal/config"
 )
 
+// AuthProvider is the interface used by Client for authentication.
+// *auth.Manager satisfies this interface.
+type AuthProvider interface {
+	GetToken() (string, error)
+	InvalidateToken()
+	WalletAddress() string
+}
+
 // Client is the Poof REST API client.
 type Client struct {
 	BaseURL     string
-	AuthManager *auth.Manager
+	AuthManager AuthProvider
 	BypassToken string
 	HTTPClient  *http.Client
 }
