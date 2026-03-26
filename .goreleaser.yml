@@ -42,7 +42,8 @@ changelog:
       - "^ci:"
 
 brews:
-  - repository:
+  - name: poof
+    repository:
       owner: poofdotnew
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
