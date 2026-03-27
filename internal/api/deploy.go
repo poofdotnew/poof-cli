@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 )
 
@@ -150,8 +151,16 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 	if err := json.Unmarshal(respBody, &uploadURLResp); err != nil {
 		return nil, fmt.Errorf("failed to parse upload URL response: %w", err)
 	}
-	if uploadURLResp.Data.UploadURL == "" {
+	if !uploadURLResp.Success || uploadURLResp.Data.UploadURL == "" {
+		if uploadURLResp.Error != "" {
+			return nil, fmt.Errorf("failed to get upload URL: %s", uploadURLResp.Error)
+		}
 		return nil, fmt.Errorf("server returned empty upload URL")
+	}
+
+	// Validate archive size against server-provided max
+	if uploadURLResp.Data.MaxSize > 0 && len(archive) > uploadURLResp.Data.MaxSize {
+		return nil, fmt.Errorf("archive size (%d bytes) exceeds maximum (%d bytes)", len(archive), uploadURLResp.Data.MaxSize)
 	}
 
 	// Step 2: Upload directly to S3 via presigned URL
@@ -160,6 +169,7 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 		return nil, fmt.Errorf("failed to create S3 upload request: %w", err)
 	}
 	s3Req.Header.Set("Content-Type", "application/gzip")
+	s3Req.ContentLength = int64(len(archive))
 
 	s3Resp, err := c.HTTPClient.Do(s3Req)
 	if err != nil {
@@ -168,7 +178,8 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 	defer s3Resp.Body.Close()
 
 	if s3Resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("S3 upload failed (HTTP %d)", s3Resp.StatusCode)
+		s3ErrBody, _ := io.ReadAll(io.LimitReader(s3Resp.Body, 1024))
+		return nil, fmt.Errorf("S3 upload failed (HTTP %d): %s", s3Resp.StatusCode, string(s3ErrBody))
 	}
 
 	// Step 3: Trigger the deploy
