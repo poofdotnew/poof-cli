@@ -65,7 +65,7 @@ var iterateCmd = &cobra.Command{
 		}
 
 		// 3. Check test results (may not exist for all projects)
-		results, err := apiClient.GetTestResults(ctx, projectID, 0, 0)
+		results, err := apiClient.GetTestResults(ctx, projectID, 100, 0)
 		if err != nil {
 			if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
 				output.Success("Done.")

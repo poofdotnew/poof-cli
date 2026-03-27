@@ -8,6 +8,7 @@ import (
 
 type SecurityScanRequest struct {
 	TarobaseToken string `json:"tarobaseToken"`
+	TaskID        string `json:"taskId,omitempty"`
 }
 
 // SecurityScanResponse matches the server's async scan initiation response.
@@ -21,7 +22,7 @@ type SecurityScanResponse struct {
 
 func (r *SecurityScanResponse) QuietString() string { return r.TaskID }
 
-func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityScanResponse, error) {
+func (c *Client) SecurityScan(ctx context.Context, projectID string, taskID ...string) (*SecurityScanResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/security-scan", projectID)
 
 	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
@@ -29,7 +30,11 @@ func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityS
 		if err != nil {
 			return nil, err
 		}
-		return SecurityScanRequest{TarobaseToken: token}, nil
+		req := SecurityScanRequest{TarobaseToken: token}
+		if len(taskID) > 0 && taskID[0] != "" {
+			req.TaskID = taskID[0]
+		}
+		return req, nil
 	})
 	if err != nil {
 		return nil, err

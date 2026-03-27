@@ -100,7 +100,9 @@ var projectUpdateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update project metadata",
 	Example: `  poof project update -p <id> --title "My App"
-  poof project update -p <id> --slug my-app --description "A cool app"`,
+  poof project update -p <id> --slug my-app --description "A cool app"
+  poof project update -p <id> --generation-mode policy
+  poof project update -p <id> --public=false --network mainnet-beta`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -120,6 +122,16 @@ var projectUpdateCmd = &cobra.Command{
 		}
 		if v, _ := cmd.Flags().GetString("slug"); v != "" {
 			req.Slug = v
+		}
+		if cmd.Flags().Changed("public") {
+			v, _ := cmd.Flags().GetBool("public")
+			req.IsPublic = &v
+		}
+		if v, _ := cmd.Flags().GetString("generation-mode"); v != "" {
+			req.GenerationMode = v
+		}
+		if v, _ := cmd.Flags().GetString("network"); v != "" {
+			req.Network = v
 		}
 
 		if err := apiClient.UpdateProject(context.Background(), projectID, req); err != nil {
@@ -285,6 +297,9 @@ func init() {
 	projectUpdateCmd.Flags().String("title", "", "New title")
 	projectUpdateCmd.Flags().String("description", "", "New description")
 	projectUpdateCmd.Flags().String("slug", "", "New slug")
+	projectUpdateCmd.Flags().Bool("public", true, "Project visibility")
+	projectUpdateCmd.Flags().String("generation-mode", "", "Generation mode: full, policy, ui,policy, backend,policy")
+	projectUpdateCmd.Flags().String("network", "", "Solana network")
 
 	projectDeleteCmd.Flags().Bool("dry-run", false, "Preview what would be deleted without making changes")
 	projectDeleteCmd.Flags().Bool("yes", false, "Skip confirmation (required for delete)")

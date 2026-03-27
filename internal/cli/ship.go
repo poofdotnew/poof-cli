@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
@@ -76,7 +78,27 @@ var shipCmd = &cobra.Command{
 			if signedPermit == "" {
 				return fmt.Errorf("--signed-permit is required for preview deploy\n  poof ship -p %s -t preview --signed-permit <transaction>", projectID)
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, signedPermit); err != nil {
+			opts := &api.PublishOptions{
+				SignedPermitTransaction: signedPermit,
+			}
+			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
+				opts.AllowedAddresses = strings.Split(addrs, ",")
+			}
+			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
+					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
+				}
+				opts.ConstantsOverrides = parsed
+			}
+			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+					return fmt.Errorf("--config must be valid JSON: %w", err)
+				}
+				opts.Config = parsed
+			}
+			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
 				return handleError(err)
 			}
 		case "mobile":
@@ -86,16 +108,42 @@ var shipCmd = &cobra.Command{
 			if platform == "" || appName == "" || appIconUrl == "" {
 				return fmt.Errorf("mobile deploy requires --platform, --app-name, and --app-icon-url")
 			}
+			appDesc, _ := cmd.Flags().GetString("app-description")
+			themeColor, _ := cmd.Flags().GetString("theme-color")
+			isDraft, _ := cmd.Flags().GetBool("draft")
+			targetEnv, _ := cmd.Flags().GetString("target-environment")
 			mobileReq := &api.MobilePublishRequest{
-				Platform:   platform,
-				AppName:    appName,
-				AppIconUrl: appIconUrl,
+				Platform:          platform,
+				AppName:           appName,
+				AppIconUrl:        appIconUrl,
+				AppDescription:    appDesc,
+				ThemeColor:        themeColor,
+				IsDraft:           isDraft,
+				TargetEnvironment: targetEnv,
 			}
 			if err := apiClient.PublishProject(ctx, projectID, target, mobileReq); err != nil {
 				return handleError(err)
 			}
 		default:
-			if err := apiClient.PublishProject(ctx, projectID, target); err != nil {
+			opts := &api.PublishOptions{}
+			if signedPermit, _ := cmd.Flags().GetString("signed-permit"); signedPermit != "" {
+				opts.SignedPermitTransaction = signedPermit
+			}
+			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
+					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
+				}
+				opts.ConstantsOverrides = parsed
+			}
+			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+					return fmt.Errorf("--config must be valid JSON: %w", err)
+				}
+				opts.Config = parsed
+			}
+			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
 				return handleError(err)
 			}
 		}
@@ -127,7 +175,14 @@ func init() {
 	shipCmd.Flags().Bool("dry-run", false, "Run scan and check eligibility, but don't deploy")
 	shipCmd.Flags().Bool("yes", false, "Skip confirmation (required for production)")
 	shipCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for preview)")
+	shipCmd.Flags().String("allowed-addresses", "", "Comma-separated wallet addresses allowed to access preview (max 10)")
+	shipCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides")
+	shipCmd.Flags().String("config", "", "JSON object of config overrides (e.g. title, favicon)")
 	shipCmd.Flags().String("platform", "", "Mobile platform: ios, android, seeker")
 	shipCmd.Flags().String("app-name", "", "Mobile app name")
 	shipCmd.Flags().String("app-icon-url", "", "Mobile app icon URL")
+	shipCmd.Flags().String("app-description", "", "Mobile app description")
+	shipCmd.Flags().String("theme-color", "#0a0a0a", "Mobile theme color (hex, e.g. #0a0a0a)")
+	shipCmd.Flags().Bool("draft", false, "Publish mobile app as draft")
+	shipCmd.Flags().String("target-environment", "", "Mobile target environment: draft, mainnet-preview")
 }

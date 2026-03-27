@@ -420,8 +420,9 @@ func TestAddDomain_Success(t *testing.T) {
 
 func TestGetFiles_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(FilesResponse{
-			FilesWithContent: map[string]string{"index.html": "<html></html>"},
+		// Server returns "filesWithContent" key; client normalizes to "files"
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"filesWithContent": map[string]string{"index.html": "<html></html>"},
 		})
 	}))
 	defer srv.Close()
@@ -431,8 +432,8 @@ func TestGetFiles_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.FilesWithContent["index.html"] != "<html></html>" {
-		t.Errorf("unexpected file content: %q", resp.FilesWithContent["index.html"])
+	if resp.Files["index.html"] != "<html></html>" {
+		t.Errorf("unexpected file content: %q", resp.Files["index.html"])
 	}
 }
 

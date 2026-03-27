@@ -36,10 +36,10 @@ var filesGetCmd = &cobra.Command{
 		}
 
 		output.Print(resp, func() {
-			for path := range resp.FilesWithContent {
+			for path := range resp.Files {
 				output.Info("%s", path)
 			}
-			output.Info("\n%d files total", len(resp.FilesWithContent))
+			output.Info("\n%d files total", len(resp.Files))
 		})
 		return nil
 	},

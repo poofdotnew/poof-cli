@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
@@ -135,20 +137,51 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 			if signedPermit == "" {
 				return fmt.Errorf("--signed-permit is required for preview deploy\n  poof deploy preview -p %s --signed-permit <transaction>", projectID)
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, signedPermit); err != nil {
+			opts := &api.PublishOptions{
+				SignedPermitTransaction: signedPermit,
+			}
+			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
+				opts.AllowedAddresses = strings.Split(addrs, ",")
+			}
+			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
+					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
+				}
+				opts.ConstantsOverrides = parsed
+			}
+			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+					return fmt.Errorf("--config must be valid JSON: %w", err)
+				}
+				opts.Config = parsed
+			}
+			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
 				return handleError(err)
 			}
 
 		default:
-			signedPermit, _ := cmd.Flags().GetString("signed-permit")
-			if signedPermit != "" {
-				if err := apiClient.PublishProject(ctx, projectID, target, signedPermit); err != nil {
-					return handleError(err)
+			opts := &api.PublishOptions{}
+			if signedPermit, _ := cmd.Flags().GetString("signed-permit"); signedPermit != "" {
+				opts.SignedPermitTransaction = signedPermit
+			}
+			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
+					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
 				}
-			} else {
-				if err := apiClient.PublishProject(ctx, projectID, target); err != nil {
-					return handleError(err)
+				opts.ConstantsOverrides = parsed
+			}
+			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
+				var parsed map[string]interface{}
+				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
+					return fmt.Errorf("--config must be valid JSON: %w", err)
 				}
+				opts.Config = parsed
+			}
+			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
+				return handleError(err)
 			}
 		}
 
@@ -178,7 +211,7 @@ var deployDownloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Start code export",
 	Example: `  poof deploy download -p <id>
-  TASK_ID=$(poof deploy download -p <id> --json | jq -r '.TaskID')`,
+  TASK_ID=$(poof deploy download -p <id> --json | jq -r '.taskId')`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -240,11 +273,16 @@ func init() {
 	deployPreviewCmd.Flags().Bool("dry-run", false, "Preview what would happen without deploying")
 	deployPreviewCmd.Flags().Bool("yes", false, "Skip confirmation")
 	deployPreviewCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for preview)")
+	deployPreviewCmd.Flags().String("allowed-addresses", "", "Comma-separated wallet addresses allowed to access preview (max 10)")
+	deployPreviewCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides for preview")
+	deployPreviewCmd.Flags().String("config", "", "JSON object of config overrides for preview (e.g. title, favicon)")
 
 	// Production flags
 	deployProductionCmd.Flags().Bool("dry-run", false, "Preview what would happen without deploying")
 	deployProductionCmd.Flags().Bool("yes", false, "Skip confirmation (required for production)")
 	deployProductionCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for subsequent deploys)")
+	deployProductionCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides for production")
+	deployProductionCmd.Flags().String("config", "", "JSON object of config overrides for production (e.g. title, favicon)")
 
 	// Mobile flags
 	deployMobileCmd.Flags().Bool("dry-run", false, "Preview what would happen without deploying")

@@ -25,12 +25,26 @@ type publishEligibilityEnvelope struct {
 // Publish request types per target.
 
 type PublishRequest struct {
-	AuthToken string `json:"authToken"`
+	AuthToken               string                 `json:"authToken"`
+	SignedPermitTransaction string                 `json:"signedPermitTransaction,omitempty"`
+	ProdConstantsOverrides  map[string]interface{} `json:"prodConstantsOverrides,omitempty"`
+	ProdConfig              map[string]interface{} `json:"prodConfig,omitempty"`
 }
 
 type PreviewPublishRequest struct {
-	AuthToken               string `json:"authToken"`
-	SignedPermitTransaction string `json:"signedPermitTransaction"`
+	AuthToken                        string                 `json:"authToken"`
+	SignedPermitTransaction          string                 `json:"signedPermitTransaction"`
+	AllowedAddresses                 []string               `json:"allowedAddresses,omitempty"`
+	MainnetPreviewConstantsOverrides map[string]interface{} `json:"mainnetPreviewConstantsOverrides,omitempty"`
+	MainnetPreviewConfig             map[string]interface{} `json:"mainnetPreviewConfig,omitempty"`
+}
+
+// PublishOptions holds optional parameters for preview/production deploys.
+type PublishOptions struct {
+	SignedPermitTransaction string
+	AllowedAddresses        []string
+	ConstantsOverrides      map[string]interface{}
+	Config                  map[string]interface{}
 }
 
 type MobilePublishRequest struct {
@@ -54,7 +68,7 @@ type downloadDataEnvelope struct {
 }
 
 type DownloadResponse struct {
-	TaskID    string `json:"downloadTaskId"`
+	TaskID    string `json:"taskId"`
 	ProjectID string `json:"projectId"`
 	Status    string `json:"status"`
 }
@@ -74,7 +88,7 @@ type DownloadURLRequest struct {
 }
 
 type DownloadURLResponse struct {
-	URL       string `json:"downloadUrl"`
+	URL       string `json:"url"`
 	ExpiresAt string `json:"expiresAt"`
 	FileName  string `json:"fileName"`
 }
@@ -121,24 +135,40 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 		return err
 	}
 
+	// Extract opts: first arg can be a string (signedPermit) or *PublishOptions.
+	var publishOpts PublishOptions
+	if len(opts) > 0 {
+		switch v := opts[0].(type) {
+		case string:
+			publishOpts.SignedPermitTransaction = v
+		case *PublishOptions:
+			if v != nil {
+				publishOpts = *v
+			}
+		}
+	}
+
 	_, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
 		token, err := c.AuthManager.GetToken()
 		if err != nil {
 			return nil, err
 		}
-		signedPermit := ""
-		if len(opts) > 0 {
-			if s, ok := opts[0].(string); ok {
-				signedPermit = s
-			}
-		}
-		if signedPermit != "" {
+		if target == "preview" {
 			return PreviewPublishRequest{
-				AuthToken:               token,
-				SignedPermitTransaction: signedPermit,
+				AuthToken:                        token,
+				SignedPermitTransaction:          publishOpts.SignedPermitTransaction,
+				AllowedAddresses:                 publishOpts.AllowedAddresses,
+				MainnetPreviewConstantsOverrides: publishOpts.ConstantsOverrides,
+				MainnetPreviewConfig:             publishOpts.Config,
 			}, nil
 		}
-		return PublishRequest{AuthToken: token}, nil
+		// production
+		return PublishRequest{
+			AuthToken:               token,
+			SignedPermitTransaction: publishOpts.SignedPermitTransaction,
+			ProdConstantsOverrides:  publishOpts.ConstantsOverrides,
+			ProdConfig:              publishOpts.Config,
+		}, nil
 	})
 	return err
 }

@@ -84,11 +84,28 @@ type UpdateProjectRequest struct {
 	GenerationMode  string                 `json:"generationMode,omitempty"`
 }
 
+// ConnectionEnv holds per-environment Tarobase connection details.
+type ConnectionEnv struct {
+	TarobaseAppId string `json:"tarobaseAppId"`
+	BackendUrl    string `json:"backendUrl"`
+}
+
+// ConnectionInfo holds Tarobase connection info returned by the status API.
+type ConnectionInfo struct {
+	Draft      *ConnectionEnv `json:"draft"`
+	Preview    *ConnectionEnv `json:"preview"`
+	Production *ConnectionEnv `json:"production"`
+	WsUrl      string         `json:"wsUrl"`
+	ApiUrl     string         `json:"apiUrl"`
+	AuthApiUrl string         `json:"authApiUrl"`
+}
+
 type ProjectStatus struct {
-	Project      Project                `json:"project"`
-	LatestTask   map[string]interface{} `json:"latestTask"`
-	PublishState map[string]interface{} `json:"publishState"`
-	URLs         map[string]string      `json:"urls"`
+	Project        Project                `json:"project"`
+	LatestTask     map[string]interface{} `json:"latestTask"`
+	PublishState   map[string]interface{} `json:"publishState"`
+	URLs           map[string]string      `json:"urls"`
+	ConnectionInfo *ConnectionInfo        `json:"connectionInfo,omitempty"`
 }
 
 type MessagesResponse struct {

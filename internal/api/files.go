@@ -6,8 +6,14 @@ import (
 	"fmt"
 )
 
-type FilesResponse struct {
+// filesRawResponse matches the server's response shape for deserialization.
+type filesRawResponse struct {
 	FilesWithContent map[string]string `json:"filesWithContent"`
+}
+
+// FilesResponse is the normalized output shape (matches MCP response).
+type FilesResponse struct {
+	Files map[string]string `json:"files"`
 }
 
 type UpdateFilesRequest struct {
@@ -22,11 +28,11 @@ func (c *Client) GetFiles(ctx context.Context, projectID string) (*FilesResponse
 		return nil, err
 	}
 
-	var resp FilesResponse
-	if err := json.Unmarshal(body, &resp); err != nil {
+	var raw filesRawResponse
+	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
 	}
-	return &resp, nil
+	return &FilesResponse{Files: raw.FilesWithContent}, nil
 }
 
 func (c *Client) UpdateFiles(ctx context.Context, projectID string, files map[string]string) error {

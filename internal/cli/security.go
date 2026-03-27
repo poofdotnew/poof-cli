@@ -17,6 +17,7 @@ var securityScanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Initiate a security audit",
 	Example: `  poof security scan -p <id>
+  poof security scan -p <id> --task <taskId>
   poof security scan -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -28,10 +29,12 @@ var securityScanCmd = &cobra.Command{
 			return err
 		}
 
+		taskID, _ := cmd.Flags().GetString("task")
+
 		var resp *api.SecurityScanResponse
 		err = output.WithSpinner("Initiating security scan...", func() error {
 			var scanErr error
-			resp, scanErr = apiClient.SecurityScan(context.Background(), projectID)
+			resp, scanErr = apiClient.SecurityScan(context.Background(), projectID, taskID)
 			return scanErr
 		})
 		if err != nil {
@@ -53,5 +56,6 @@ var securityScanCmd = &cobra.Command{
 }
 
 func init() {
+	securityScanCmd.Flags().String("task", "", "Task ID to check status of a previous scan")
 	securityCmd.AddCommand(securityScanCmd)
 }

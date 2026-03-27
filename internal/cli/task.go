@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
@@ -16,8 +15,9 @@ var taskCmd = &cobra.Command{
 var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks (builds, deployments, downloads)",
-	Example: `  poof task list -p <id> --change-id <changeId>
-  poof task list -p <id> --change-id <changeId> --json`,
+	Example: `  poof task list -p <id>
+  poof task list -p <id> --change-id <changeId>
+  poof task list -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -30,7 +30,7 @@ var taskListCmd = &cobra.Command{
 
 		changeID, _ := cmd.Flags().GetString("change-id")
 		if changeID == "" {
-			return fmt.Errorf("--change-id is required\n  poof task list -p %s --change-id <changeId>", projectID)
+			changeID = "latest"
 		}
 
 		resp, err := apiClient.ListTasks(context.Background(), projectID, changeID)
@@ -128,7 +128,7 @@ var taskTestResultsCmd = &cobra.Command{
 }
 
 func init() {
-	taskListCmd.Flags().String("change-id", "", "Change ID (required)")
+	taskListCmd.Flags().String("change-id", "", "Change ID (default: latest)")
 
 	taskTestResultsCmd.Flags().Int("limit", 100, "Max test results to return (1-100)")
 	taskTestResultsCmd.Flags().Int("offset", 0, "Offset for pagination")
