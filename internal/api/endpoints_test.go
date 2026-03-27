@@ -551,7 +551,7 @@ func TestUpdateProject_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.UpdateProject(context.Background(), "proj-1", UpdateProjectRequest{Title: "New Title"})
+	err := client.UpdateProject(context.Background(), "proj-1", &UpdateProjectRequest{Title: "New Title"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

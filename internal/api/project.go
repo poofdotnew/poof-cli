@@ -161,7 +161,7 @@ func (c *Client) CreateProject(ctx context.Context, req CreateProjectRequest) (*
 	return &resp, nil
 }
 
-func (c *Client) UpdateProject(ctx context.Context, projectID string, req UpdateProjectRequest) error {
+func (c *Client) UpdateProject(ctx context.Context, projectID string, req *UpdateProjectRequest) error {
 	path := fmt.Sprintf("/api/project/%s", projectID)
 	_, err := c.Do(ctx, "PUT", path, req)
 	return err

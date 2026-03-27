@@ -134,7 +134,7 @@ var projectUpdateCmd = &cobra.Command{
 			req.Network = v
 		}
 
-		if err := apiClient.UpdateProject(context.Background(), projectID, req); err != nil {
+		if err := apiClient.UpdateProject(context.Background(), projectID, &req); err != nil {
 			return handleError(err)
 		}
 
