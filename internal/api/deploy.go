@@ -59,6 +59,8 @@ type DownloadResponse struct {
 	Status    string `json:"status"`
 }
 
+func (r *DownloadResponse) QuietString() string { return r.TaskID }
+
 type downloadURLDataEnvelope struct {
 	Data struct {
 		DownloadURL string `json:"downloadUrl"`
@@ -76,6 +78,8 @@ type DownloadURLResponse struct {
 	ExpiresAt string `json:"expiresAt"`
 	FileName  string `json:"fileName"`
 }
+
+func (r *DownloadURLResponse) QuietString() string { return r.URL }
 
 func (c *Client) CheckPublishEligibility(ctx context.Context, projectID string) (*PublishEligibility, error) {
 	path := fmt.Sprintf("/api/project/%s/check-publish-eligibility", projectID)

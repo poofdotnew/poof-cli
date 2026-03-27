@@ -112,7 +112,7 @@ var shipCmd = &cobra.Command{
 			}, func() {
 				for name, url := range status.URLs {
 					if url != "" {
-						fmt.Printf("  %s: %s\n", name, url)
+						output.Info("  %s: %s", name, url)
 					}
 				}
 			})

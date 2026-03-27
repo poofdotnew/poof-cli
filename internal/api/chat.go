@@ -19,6 +19,8 @@ type ChatResponse struct {
 	MessageID string `json:"messageId"`
 }
 
+func (r *ChatResponse) QuietString() string { return r.MessageID }
+
 type AIActiveResponse struct {
 	Active bool   `json:"active"`
 	Status string `json:"status"`

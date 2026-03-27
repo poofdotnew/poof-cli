@@ -20,6 +20,8 @@ type TaskDetail struct {
 	Title  string `json:"title"`
 }
 
+func (r *TaskResponse) QuietString() string { return r.Task.ID }
+
 type TestResultsResponse struct {
 	Results []TestResult `json:"results"`
 	Summary TestSummary  `json:"summary"`

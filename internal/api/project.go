@@ -64,6 +64,8 @@ type CreateProjectResponse struct {
 	Message   string `json:"message"`
 }
 
+func (r *CreateProjectResponse) QuietString() string { return r.ProjectID }
+
 type UpdateProjectRequest struct {
 	Title          string `json:"title,omitempty"`
 	Description    string `json:"description,omitempty"`

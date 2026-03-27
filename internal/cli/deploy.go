@@ -37,10 +37,12 @@ var deployCheckCmd = &cobra.Command{
 		output.Print(resp, func() {
 			if resp.Eligible() {
 				output.Success("Project is eligible for deployment.")
-			} else {
-				output.Error("Not eligible (%s): %s", resp.Status, resp.Message)
 			}
 		})
+
+		if !resp.Eligible() {
+			return fmt.Errorf("not eligible for deployment (%s): %s", resp.Status, resp.Message)
+		}
 		return nil
 	},
 }

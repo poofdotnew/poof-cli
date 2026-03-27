@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
@@ -40,7 +39,7 @@ var logsCmd = &cobra.Command{
 				return
 			}
 			for _, l := range resp.Logs {
-				fmt.Printf("[%s] %s: %s\n", l.Timestamp, l.Level, l.Message)
+				output.Info("[%s] %s: %s", l.Timestamp, l.Level, l.Message)
 			}
 			if resp.TotalCount > len(resp.Logs) {
 				output.Info("\nShowing %d of %d total log entries.", len(resp.Logs), resp.TotalCount)

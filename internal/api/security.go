@@ -19,6 +19,8 @@ type SecurityScanResponse struct {
 	TaskTitle string `json:"taskTitle"`
 }
 
+func (r *SecurityScanResponse) QuietString() string { return r.TaskID }
+
 func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityScanResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/security-scan", projectID)
 

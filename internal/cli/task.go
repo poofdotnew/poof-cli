@@ -112,7 +112,7 @@ var taskTestResultsCmd = &cobra.Command{
 				resp.Summary.Total, resp.Summary.Passed, resp.Summary.Failed, resp.Summary.Errors)
 
 			if resp.Summary.Failed > 0 || resp.Summary.Errors > 0 {
-				fmt.Println()
+				output.Info("")
 				for _, r := range resp.Results {
 					if r.Status == "failed" || r.Status == "error" {
 						output.Error("  %s: %s", r.FileName, r.LastError)
