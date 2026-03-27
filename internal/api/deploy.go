@@ -119,7 +119,6 @@ type uploadURLEnvelope struct {
 	Data    struct {
 		UploadURL string `json:"uploadUrl"`
 		TaskID    string `json:"taskId"`
-		S3Key     string `json:"s3Key"`
 		MaxSize   int    `json:"maxSize"`
 		ExpiresIn int    `json:"expiresIn"`
 	} `json:"data"`
