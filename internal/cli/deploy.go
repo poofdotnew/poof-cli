@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
@@ -207,6 +208,81 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 	}
 }
 
+var deployStaticCmd = &cobra.Command{
+	Use:   "static",
+	Short: "Deploy a pre-built static frontend",
+	Example: `  poof deploy static -p <id> --archive dist.tar.gz
+  poof deploy static -p <id> --archive dist.tar.gz --title "v2.0 release"
+  poof deploy static -p <id> --archive dist.tar.gz --dry-run`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireAuth(); err != nil {
+			return err
+		}
+
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		archivePath, _ := cmd.Flags().GetString("archive")
+		if archivePath == "" {
+			return fmt.Errorf("--archive is required\n  poof deploy static -p %s --archive dist.tar.gz", projectID)
+		}
+
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		title, _ := cmd.Flags().GetString("title")
+		description, _ := cmd.Flags().GetString("description")
+
+		// Read and validate the archive
+		archive, err := os.ReadFile(archivePath)
+		if err != nil {
+			return fmt.Errorf("failed to read archive %q: %w", archivePath, err)
+		}
+
+		if len(archive) < 2 || archive[0] != 0x1f || archive[1] != 0x8b {
+			return fmt.Errorf("file %q is not a valid gzip archive. Create with: tar czf dist.tar.gz -C dist .", archivePath)
+		}
+
+		if dryRun {
+			output.Info("Would deploy static frontend from %s (%d bytes) to project %s. No changes made.", archivePath, len(archive), projectID)
+			return nil
+		}
+
+		ctx := context.Background()
+		resp, err := apiClient.DeployStatic(ctx, projectID, archive, title, description)
+		if err != nil {
+			return handleError(err)
+		}
+
+		// Match existing deploy pattern: get URLs after deploy
+		status, sErr := apiClient.GetProjectStatus(ctx, projectID)
+		if sErr == nil {
+			output.Print(map[string]interface{}{
+				"target":    "static",
+				"projectId": projectID,
+				"taskId":    resp.TaskID,
+				"bundleUrl": resp.BundleURL,
+				"urls":      status.URLs,
+			}, func() {
+				output.Success("Static frontend deployed.")
+				for name, url := range status.URLs {
+					if url != "" {
+						output.Info("  %s: %s", name, url)
+					}
+				}
+			})
+		} else {
+			output.Print(resp, func() {
+				output.Success("Static frontend deployed.")
+				if resp.BundleURL != "" {
+					output.Info("  URL: %s", resp.BundleURL)
+				}
+			})
+		}
+		return nil
+	},
+}
+
 var deployDownloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Start code export",
@@ -297,10 +373,17 @@ func init() {
 
 	deployDownloadURLCmd.Flags().String("task", "", "Task ID from download command (required)")
 
+	// Static deploy flags
+	deployStaticCmd.Flags().String("archive", "", "Path to tar.gz archive of your dist/ folder (required)")
+	deployStaticCmd.Flags().String("title", "", "Checkpoint title")
+	deployStaticCmd.Flags().String("description", "", "Checkpoint description")
+	deployStaticCmd.Flags().Bool("dry-run", false, "Validate without deploying")
+
 	deployCmd.AddCommand(deployCheckCmd)
 	deployCmd.AddCommand(deployPreviewCmd)
 	deployCmd.AddCommand(deployProductionCmd)
 	deployCmd.AddCommand(deployMobileCmd)
+	deployCmd.AddCommand(deployStaticCmd)
 	deployCmd.AddCommand(deployDownloadCmd)
 	deployCmd.AddCommand(deployDownloadURLCmd)
 }

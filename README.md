@@ -176,6 +176,7 @@ poof deploy check -p <id>              # check publish eligibility
 poof deploy preview -p <id>            # deploy to mainnet preview
 poof deploy production -p <id>         # deploy to production
 poof deploy mobile -p <id>            # publish mobile app
+poof deploy static -p <id> --archive dist.tar.gz   # deploy pre-built static frontend
 poof deploy download -p <id>           # start code export
 poof deploy download-url -p <id> --task <taskId>   # get download link
 ```

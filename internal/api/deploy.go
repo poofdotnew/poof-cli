@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 )
 
 // PublishEligibility matches the server's nested response shape.
@@ -94,6 +97,105 @@ type DownloadURLResponse struct {
 }
 
 func (r *DownloadURLResponse) QuietString() string { return r.URL }
+
+// StaticDeployResponse is the response from deploy-static.
+type StaticDeployResponse struct {
+	ProjectID string `json:"projectId"`
+	TaskID    string `json:"taskId"`
+	BundleURL string `json:"bundleUrl"`
+	Slug      string `json:"slug"`
+}
+
+func (r *StaticDeployResponse) QuietString() string { return r.BundleURL }
+
+type staticDeployEnvelope struct {
+	Success bool                 `json:"success"`
+	Data    StaticDeployResponse `json:"data"`
+	Error   string               `json:"error,omitempty"`
+}
+
+type uploadURLEnvelope struct {
+	Success bool `json:"success"`
+	Data    struct {
+		UploadURL string `json:"uploadUrl"`
+		TaskID    string `json:"taskId"`
+		MaxSize   int    `json:"maxSize"`
+		ExpiresIn int    `json:"expiresIn"`
+	} `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+// DeployStatic uploads a pre-built static frontend (tar.gz) to a project.
+// Uses a 3-step presigned URL flow:
+//  1. Get a presigned S3 upload URL from the API
+//  2. Upload the archive directly to S3
+//  3. Trigger the deploy pipeline
+func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []byte, title, description string) (*StaticDeployResponse, error) {
+	// Step 1: Get presigned upload URL
+	uploadURLPath := fmt.Sprintf("/api/project/%s/deploy-static/upload-url", projectID)
+	uploadReqBody := map[string]string{}
+	if title != "" {
+		uploadReqBody["title"] = title
+	}
+	if description != "" {
+		uploadReqBody["description"] = description
+	}
+
+	respBody, err := c.Do(ctx, "POST", uploadURLPath, uploadReqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get upload URL: %w", err)
+	}
+
+	var uploadURLResp uploadURLEnvelope
+	if err := json.Unmarshal(respBody, &uploadURLResp); err != nil {
+		return nil, fmt.Errorf("failed to parse upload URL response: %w", err)
+	}
+	if !uploadURLResp.Success || uploadURLResp.Data.UploadURL == "" {
+		if uploadURLResp.Error != "" {
+			return nil, fmt.Errorf("failed to get upload URL: %s", uploadURLResp.Error)
+		}
+		return nil, fmt.Errorf("server returned empty upload URL")
+	}
+
+	// Validate archive size against server-provided max
+	if uploadURLResp.Data.MaxSize > 0 && len(archive) > uploadURLResp.Data.MaxSize {
+		return nil, fmt.Errorf("archive size (%d bytes) exceeds maximum (%d bytes)", len(archive), uploadURLResp.Data.MaxSize)
+	}
+
+	// Step 2: Upload directly to S3 via presigned URL
+	s3Req, err := http.NewRequestWithContext(ctx, "PUT", uploadURLResp.Data.UploadURL, bytes.NewReader(archive))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create S3 upload request: %w", err)
+	}
+	s3Req.Header.Set("Content-Type", "application/gzip")
+	s3Req.ContentLength = int64(len(archive))
+
+	s3Resp, err := c.HTTPClient.Do(s3Req)
+	if err != nil {
+		return nil, fmt.Errorf("S3 upload failed: %w", err)
+	}
+	defer s3Resp.Body.Close()
+
+	if s3Resp.StatusCode >= 400 {
+		s3ErrBody, _ := io.ReadAll(io.LimitReader(s3Resp.Body, 1024))
+		return nil, fmt.Errorf("S3 upload failed (HTTP %d): %s", s3Resp.StatusCode, string(s3ErrBody))
+	}
+
+	// Step 3: Trigger the deploy
+	triggerPath := fmt.Sprintf("/api/project/%s/deploy-static/trigger", projectID)
+	triggerBody := map[string]string{"taskId": uploadURLResp.Data.TaskID}
+
+	triggerRespBody, err := c.Do(ctx, "POST", triggerPath, triggerBody)
+	if err != nil {
+		return nil, fmt.Errorf("deploy trigger failed: %w", err)
+	}
+
+	var envelope staticDeployEnvelope
+	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
+	}
+	return &envelope.Data, nil
+}
 
 func (c *Client) CheckPublishEligibility(ctx context.Context, projectID string) (*PublishEligibility, error) {
 	path := fmt.Sprintf("/api/project/%s/check-publish-eligibility", projectID)
