@@ -67,11 +67,21 @@ type CreateProjectResponse struct {
 func (r *CreateProjectResponse) QuietString() string { return r.ProjectID }
 
 type UpdateProjectRequest struct {
-	Title          string `json:"title,omitempty"`
-	Description    string `json:"description,omitempty"`
-	Slug           string `json:"slug,omitempty"`
-	IsPublic       *bool  `json:"isPublic,omitempty"`
-	GenerationMode string `json:"generationMode,omitempty"`
+	Title           string                 `json:"title,omitempty"`
+	Name            string                 `json:"name,omitempty"`
+	Description     string                 `json:"description,omitempty"`
+	Slug            string                 `json:"slug,omitempty"`
+	IsPublic        *bool                  `json:"isPublic,omitempty"`
+	IsAppPagePublic *bool                  `json:"isAppPagePublic,omitempty"`
+	Network         string                 `json:"network,omitempty"`
+	TarobaseEnv     string                 `json:"tarobaseEnv,omitempty"`
+	IsPlanMode      *bool                  `json:"isPlanMode,omitempty"`
+	Auth            map[string]interface{} `json:"auth,omitempty"`
+	Settings        map[string]interface{} `json:"settings,omitempty"`
+	Screenshots     []string               `json:"screenshots,omitempty"`
+	AppPageSettings map[string]interface{} `json:"appPageSettings,omitempty"`
+	IsFavorite      *bool                  `json:"isFavorite,omitempty"`
+	GenerationMode  string                 `json:"generationMode,omitempty"`
 }
 
 type ProjectStatus struct {

@@ -131,7 +131,7 @@ var chatSteerCmd = &cobra.Command{
 			return fmt.Errorf("--message is required\n  poof chat steer -p %s -m \"Focus on backend\"", projectID)
 		}
 
-		if err := apiClient.SteerAI(context.Background(), projectID, message); err != nil {
+		if err := apiClient.SteerAI(context.Background(), projectID, message, ""); err != nil {
 			return handleError(err)
 		}
 

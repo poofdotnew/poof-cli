@@ -91,7 +91,7 @@ func TestSteerAI_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.SteerAI(context.Background(), "proj-1", "go faster")
+	err := client.SteerAI(context.Background(), "proj-1", "go faster", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

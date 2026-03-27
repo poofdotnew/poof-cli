@@ -27,7 +27,8 @@ type AIActiveResponse struct {
 }
 
 type SteerRequest struct {
-	Message string `json:"message"`
+	Message   string `json:"message"`
+	MessageID string `json:"messageId,omitempty"`
 }
 
 func (c *Client) Chat(ctx context.Context, projectID, message string) (*ChatResponse, error) {
@@ -75,8 +76,8 @@ func (c *Client) CancelAI(ctx context.Context, projectID string) error {
 	return err
 }
 
-func (c *Client) SteerAI(ctx context.Context, projectID, message string) error {
+func (c *Client) SteerAI(ctx context.Context, projectID, message, messageID string) error {
 	path := fmt.Sprintf("/api/project/%s/steer", projectID)
-	_, err := c.Do(ctx, "POST", path, SteerRequest{Message: message})
+	_, err := c.Do(ctx, "POST", path, SteerRequest{Message: message, MessageID: messageID})
 	return err
 }
