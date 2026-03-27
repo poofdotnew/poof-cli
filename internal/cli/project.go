@@ -46,6 +46,9 @@ var projectListCmd = &cobra.Command{
 				rows[i] = []string{p.ID, p.Title, p.Slug}
 			}
 			output.Table([]string{"ID", "Title", "Slug"}, rows)
+			if resp.HasMore {
+				output.Info("(more projects available — use --offset %d to see next page)", offset+limit)
+			}
 		})
 		return nil
 	},
@@ -205,6 +208,7 @@ var projectMessagesCmd = &cobra.Command{
 	Use:   "messages",
 	Short: "Get conversation history",
 	Example: `  poof project messages -p <id>
+  poof project messages -p <id> --limit 100
   poof project messages -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -216,7 +220,10 @@ var projectMessagesCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := apiClient.GetMessages(context.Background(), projectID)
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+
+		resp, err := apiClient.GetMessages(context.Background(), projectID, limit, offset)
 		if err != nil {
 			return handleError(err)
 		}
@@ -228,6 +235,9 @@ var projectMessagesCmd = &cobra.Command{
 					role = "AI"
 				}
 				output.Info("[%s] %s: %s", m.Status, role, truncate(m.Content, 200))
+			}
+			if resp.HasMore {
+				output.Info("(more messages available — use --offset %d to see next page)", offset+limit)
 			}
 		})
 		return nil
@@ -278,6 +288,9 @@ func init() {
 
 	projectDeleteCmd.Flags().Bool("dry-run", false, "Preview what would be deleted without making changes")
 	projectDeleteCmd.Flags().Bool("yes", false, "Skip confirmation (required for delete)")
+
+	projectMessagesCmd.Flags().Int("limit", 50, "Max messages to return (1-200)")
+	projectMessagesCmd.Flags().Int("offset", 0, "Offset for pagination")
 
 	projectCmd.AddCommand(projectListCmd)
 	projectCmd.AddCommand(projectCreateCmd)

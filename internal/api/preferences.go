@@ -7,11 +7,13 @@ import (
 )
 
 type PreferencesResponse struct {
-	Preferences map[string]string `json:"preferences"`
+	Preferences    map[string]interface{} `json:"preferences"`
+	HasMembership  bool                   `json:"hasMembership"`
+	MembershipTier string                 `json:"membershipTier"`
 }
 
 type SetPreferencesRequest struct {
-	Preferences map[string]string `json:"preferences"`
+	Preferences map[string]interface{} `json:"preferences"`
 }
 
 func (c *Client) GetPreferences(ctx context.Context) (*PreferencesResponse, error) {
@@ -27,7 +29,7 @@ func (c *Client) GetPreferences(ctx context.Context) (*PreferencesResponse, erro
 	return &resp, nil
 }
 
-func (c *Client) SetPreferences(ctx context.Context, preferences map[string]string) error {
+func (c *Client) SetPreferences(ctx context.Context, preferences map[string]interface{}) error {
 	req := SetPreferencesRequest{Preferences: preferences}
 	_, err := c.Do(ctx, "PUT", "/api/user/ai-preferences", req)
 	return err

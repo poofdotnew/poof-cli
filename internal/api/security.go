@@ -10,26 +10,13 @@ type SecurityScanRequest struct {
 	TarobaseToken string `json:"tarobaseToken"`
 }
 
+// SecurityScanResponse matches the server's async scan initiation response.
 type SecurityScanResponse struct {
-	Vulnerabilities []Vulnerability `json:"vulnerabilities"`
-	Summary         ScanSummary     `json:"summary"`
-	Status          string          `json:"status"`
-}
-
-type Vulnerability struct {
-	Severity    string `json:"severity"`
-	Category    string `json:"category"`
-	Description string `json:"description"`
-	File        string `json:"file,omitempty"`
-	Line        int    `json:"line,omitempty"`
-}
-
-type ScanSummary struct {
-	Total    int `json:"total"`
-	Critical int `json:"critical"`
-	High     int `json:"high"`
-	Medium   int `json:"medium"`
-	Low      int `json:"low"`
+	Success   bool   `json:"success"`
+	MessageID string `json:"messageId"`
+	Message   string `json:"message"`
+	TaskID    string `json:"taskId"`
+	TaskTitle string `json:"taskTitle"`
 }
 
 func (c *Client) SecurityScan(ctx context.Context, projectID string) (*SecurityScanResponse, error) {

@@ -45,11 +45,7 @@ var chatSendCmd = &cobra.Command{
 		}
 
 		output.Print(resp, func() {
-			if resp.Queued {
-				output.Info("Message queued (AI was already active). It will execute in order.")
-			} else {
-				output.Success("Message sent. AI is building...")
-			}
+			output.Success("Message sent. AI is building...")
 			output.Info("Message ID: %s", resp.MessageID)
 		})
 		return nil

@@ -17,7 +17,6 @@ type ChatRequest struct {
 type ChatResponse struct {
 	Success   bool   `json:"success"`
 	MessageID string `json:"messageId"`
-	Queued    bool   `json:"queued"`
 }
 
 type AIActiveResponse struct {

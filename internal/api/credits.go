@@ -12,9 +12,15 @@ type CreditsResponse struct {
 }
 
 type CreditDetails struct {
-	Daily DailyCredits `json:"daily"`
-	AddOn AddOnCredits `json:"addOn"`
-	Total int          `json:"total"`
+	Daily        DailyCredits        `json:"daily"`
+	Subscription SubscriptionCredits `json:"subscription"`
+	AddOn        AddOnCredits        `json:"addOn"`
+	Total        int                 `json:"total"`
+}
+
+type SubscriptionCredits struct {
+	Remaining int `json:"remaining"`
+	Purchased int `json:"purchased"`
 }
 
 type DailyCredits struct {

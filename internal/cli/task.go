@@ -16,8 +16,8 @@ var taskCmd = &cobra.Command{
 var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks (builds, deployments, downloads)",
-	Example: `  poof task list -p <id>
-  poof task list -p <id> --json`,
+	Example: `  poof task list -p <id> --change-id <changeId>
+  poof task list -p <id> --change-id <changeId> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -28,7 +28,12 @@ var taskListCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := apiClient.ListTasks(context.Background(), projectID)
+		changeID, _ := cmd.Flags().GetString("change-id")
+		if changeID == "" {
+			return fmt.Errorf("--change-id is required\n  poof task list -p %s --change-id <changeId>", projectID)
+		}
+
+		resp, err := apiClient.ListTasks(context.Background(), projectID, changeID)
 		if err != nil {
 			return handleError(err)
 		}
@@ -72,9 +77,9 @@ var taskGetCmd = &cobra.Command{
 		}
 
 		output.Print(resp, func() {
-			output.Info("Task:   %s", resp.ID)
-			output.Info("Status: %s", resp.Status)
-			output.Info("Title:  %s", resp.Title)
+			output.Info("Task:   %s", resp.Task.ID)
+			output.Info("Status: %s", resp.Task.Status)
+			output.Info("Title:  %s", resp.Task.Title)
 		})
 		return nil
 	},
@@ -95,7 +100,9 @@ var taskTestResultsCmd = &cobra.Command{
 			return err
 		}
 
-		resp, err := apiClient.GetTestResults(context.Background(), projectID)
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
+		resp, err := apiClient.GetTestResults(context.Background(), projectID, limit, offset)
 		if err != nil {
 			return handleError(err)
 		}
@@ -112,12 +119,20 @@ var taskTestResultsCmd = &cobra.Command{
 					}
 				}
 			}
+			if resp.HasMore {
+				output.Info("(more results available — use --offset %d to see next page)", offset+limit)
+			}
 		})
 		return nil
 	},
 }
 
 func init() {
+	taskListCmd.Flags().String("change-id", "", "Change ID (required)")
+
+	taskTestResultsCmd.Flags().Int("limit", 100, "Max test results to return (1-100)")
+	taskTestResultsCmd.Flags().Int("offset", 0, "Offset for pagination")
+
 	taskCmd.AddCommand(taskListCmd)
 	taskCmd.AddCommand(taskGetCmd)
 	taskCmd.AddCommand(taskTestResultsCmd)

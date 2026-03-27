@@ -11,6 +11,10 @@ type TasksResponse struct {
 }
 
 type TaskResponse struct {
+	Task TaskDetail `json:"task"`
+}
+
+type TaskDetail struct {
 	ID     string `json:"id"`
 	Status string `json:"status"`
 	Title  string `json:"title"`
@@ -19,6 +23,7 @@ type TaskResponse struct {
 type TestResultsResponse struct {
 	Results []TestResult `json:"results"`
 	Summary TestSummary  `json:"summary"`
+	HasMore bool         `json:"hasMore"`
 }
 
 type TestResult struct {
@@ -46,8 +51,8 @@ type TestSummary struct {
 	Running int `json:"running"`
 }
 
-func (c *Client) ListTasks(ctx context.Context, projectID string) (*TasksResponse, error) {
-	path := fmt.Sprintf("/api/project/%s/tasks", projectID)
+func (c *Client) ListTasks(ctx context.Context, projectID, changeID string) (*TasksResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/tasks?changeId=%s", projectID, changeID)
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
@@ -74,8 +79,16 @@ func (c *Client) GetTask(ctx context.Context, projectID, taskID string) (*TaskRe
 	return &resp, nil
 }
 
-func (c *Client) GetTestResults(ctx context.Context, projectID string) (*TestResultsResponse, error) {
+func (c *Client) GetTestResults(ctx context.Context, projectID string, limit, offset int) (*TestResultsResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/test-results", projectID)
+	sep := "?"
+	if limit > 0 {
+		path += fmt.Sprintf("%slimit=%d", sep, limit)
+		sep = "&"
+	}
+	if offset > 0 {
+		path += fmt.Sprintf("%soffset=%d", sep, offset)
+	}
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err

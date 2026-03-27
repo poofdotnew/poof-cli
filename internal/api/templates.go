@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 )
 
 type Template struct {
@@ -15,11 +16,18 @@ type Template struct {
 	Category    string `json:"category"`
 }
 
-type TemplatesResponse struct {
-	Templates []Template `json:"templates"`
+type TemplatePagination struct {
+	Limit   int  `json:"limit"`
+	Skip    int  `json:"skip"`
+	HasMore bool `json:"hasMore"`
 }
 
-func (c *Client) ListTemplates(ctx context.Context, category, search, sortBy string) (*TemplatesResponse, error) {
+type TemplatesResponse struct {
+	Templates  []Template         `json:"templates"`
+	Pagination TemplatePagination `json:"pagination"`
+}
+
+func (c *Client) ListTemplates(ctx context.Context, category, search, sortBy string, limit, skip int) (*TemplatesResponse, error) {
 	params := url.Values{}
 	if category != "" {
 		params.Set("category", category)
@@ -29,6 +37,12 @@ func (c *Client) ListTemplates(ctx context.Context, category, search, sortBy str
 	}
 	if sortBy != "" {
 		params.Set("sortBy", sortBy)
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	if skip > 0 {
+		params.Set("skip", strconv.Itoa(skip))
 	}
 
 	path := "/api/template"

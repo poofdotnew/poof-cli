@@ -239,7 +239,13 @@ func TestTopupPhase2_PaymentFailed(t *testing.T) {
 
 func TestCheckPublishEligibility_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(PublishEligibility{Eligible: true})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"status":  "approved",
+				"message": "Ready to deploy",
+			},
+		})
 	}))
 	defer srv.Close()
 
@@ -248,30 +254,58 @@ func TestCheckPublishEligibility_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !resp.Eligible {
-		t.Error("expected Eligible=true")
+	if !resp.Eligible() {
+		t.Error("expected Eligible()=true")
 	}
 }
 
-func TestPublishProject_ValidTargets(t *testing.T) {
-	targets := []string{"preview", "production", "mobile"}
-	for _, target := range targets {
-		t.Run(target, func(t *testing.T) {
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.Method != http.MethodPost {
-					t.Errorf("expected POST, got %s", r.Method)
-				}
-				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{}`))
-			}))
-			defer srv.Close()
+func TestPublishProject_Production(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
 
-			client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-			err := client.PublishProject(context.Background(), "proj-1", target)
-			if err != nil {
-				t.Fatalf("unexpected error for target %q: %v", target, err)
-			}
-		})
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	err := client.PublishProject(context.Background(), "proj-1", "production")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPublishProject_Preview(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	err := client.PublishProject(context.Background(), "proj-1", "preview", "signed-tx-data")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestPublishProject_Mobile(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	mobileReq := &MobilePublishRequest{
+		Platform:   "ios",
+		AppName:    "Test App",
+		AppIconUrl: "https://example.com/icon.png",
+	}
+	err := client.PublishProject(context.Background(), "proj-1", "mobile", mobileReq)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -288,7 +322,14 @@ func TestPublishProject_InvalidTarget(t *testing.T) {
 
 func TestDownloadCode_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(DownloadResponse{TaskID: "task-abc"})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"downloadTaskId": "task-abc",
+				"projectId":      "proj-1",
+				"status":         "in_progress",
+			},
+		})
 	}))
 	defer srv.Close()
 
@@ -304,7 +345,14 @@ func TestDownloadCode_Success(t *testing.T) {
 
 func TestGetDownloadURL_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(DownloadURLResponse{URL: "https://example.com/download"})
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success": true,
+			"data": map[string]interface{}{
+				"downloadUrl": "https://example.com/download",
+				"expiresAt":   "2026-01-01T00:00:00Z",
+				"fileName":    "code.zip",
+			},
+		})
 	}))
 	defer srv.Close()
 
@@ -373,7 +421,7 @@ func TestAddDomain_Success(t *testing.T) {
 func TestGetFiles_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(FilesResponse{
-			Files: map[string]string{"index.html": "<html></html>"},
+			FilesWithContent: map[string]string{"index.html": "<html></html>"},
 		})
 	}))
 	defer srv.Close()
@@ -383,8 +431,8 @@ func TestGetFiles_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Files["index.html"] != "<html></html>" {
-		t.Errorf("unexpected file content: %q", resp.Files["index.html"])
+	if resp.FilesWithContent["index.html"] != "<html></html>" {
+		t.Errorf("unexpected file content: %q", resp.FilesWithContent["index.html"])
 	}
 }
 
@@ -564,7 +612,7 @@ func TestGetMessages_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.GetMessages(context.Background(), "proj-1")
+	resp, err := client.GetMessages(context.Background(), "proj-1", 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -586,12 +634,11 @@ func TestSecurityScan_Success(t *testing.T) {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
 		json.NewEncoder(w).Encode(SecurityScanResponse{
-			Status:  "complete",
-			Summary: ScanSummary{Total: 2, High: 1, Medium: 1},
-			Vulnerabilities: []Vulnerability{
-				{Severity: "high", Category: "xss", Description: "XSS in input"},
-				{Severity: "medium", Category: "csrf", Description: "Missing CSRF token"},
-			},
+			Success:   true,
+			MessageID: "msg-1",
+			Message:   "Security scan initiated successfully",
+			TaskID:    "task-1",
+			TaskTitle: "Security Audit",
 		})
 	}))
 	defer srv.Close()
@@ -601,14 +648,14 @@ func TestSecurityScan_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Status != "complete" {
-		t.Errorf("expected status=complete, got %q", resp.Status)
+	if !resp.Success {
+		t.Error("expected Success=true")
 	}
-	if resp.Summary.Total != 2 {
-		t.Errorf("expected Total=2, got %d", resp.Summary.Total)
+	if resp.TaskID != "task-1" {
+		t.Errorf("expected TaskID=task-1, got %q", resp.TaskID)
 	}
-	if len(resp.Vulnerabilities) != 2 {
-		t.Errorf("expected 2 vulnerabilities, got %d", len(resp.Vulnerabilities))
+	if resp.Message != "Security scan initiated successfully" {
+		t.Errorf("unexpected message: %q", resp.Message)
 	}
 }
 
@@ -627,7 +674,7 @@ func TestListTasks_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.ListTasks(context.Background(), "proj-1")
+	resp, err := client.ListTasks(context.Background(), "proj-1", "change-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -638,7 +685,7 @@ func TestListTasks_Success(t *testing.T) {
 
 func TestGetTask_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(TaskResponse{ID: "t1", Status: "running", Title: "Build"})
+		json.NewEncoder(w).Encode(TaskResponse{Task: TaskDetail{ID: "t1", Status: "running", Title: "Build"}})
 	}))
 	defer srv.Close()
 
@@ -647,11 +694,11 @@ func TestGetTask_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.ID != "t1" {
-		t.Errorf("expected ID=t1, got %q", resp.ID)
+	if resp.Task.ID != "t1" {
+		t.Errorf("expected ID=t1, got %q", resp.Task.ID)
 	}
-	if resp.Status != "running" {
-		t.Errorf("expected Status=running, got %q", resp.Status)
+	if resp.Task.Status != "running" {
+		t.Errorf("expected Status=running, got %q", resp.Task.Status)
 	}
 }
 
@@ -667,7 +714,7 @@ func TestGetTestResults_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.GetTestResults(context.Background(), "proj-1")
+	resp, err := client.GetTestResults(context.Background(), "proj-1", 100, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -697,7 +744,7 @@ func TestListTemplates_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.ListTemplates(context.Background(), "defi", "", "")
+	resp, err := client.ListTemplates(context.Background(), "defi", "", "", 20, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -719,7 +766,7 @@ func TestListTemplates_NoParams(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.ListTemplates(context.Background(), "", "", "")
+	resp, err := client.ListTemplates(context.Background(), "", "", "", 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -749,7 +796,7 @@ func TestGetLogs_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.GetLogs(context.Background(), "proj-1", "preview", 50)
+	resp, err := client.GetLogs(context.Background(), "proj-1", "preview", 50, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -774,7 +821,7 @@ func TestGetLogs_NoParams(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	_, err := client.GetLogs(context.Background(), "proj-1", "", 0)
+	_, err := client.GetLogs(context.Background(), "proj-1", "", 0, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -790,7 +837,7 @@ func TestGetPreferences_Success(t *testing.T) {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		json.NewEncoder(w).Encode(PreferencesResponse{
-			Preferences: map[string]string{"tier": "pro"},
+			Preferences: map[string]interface{}{"mainChat": "smart"},
 		})
 	}))
 	defer srv.Close()
@@ -800,8 +847,8 @@ func TestGetPreferences_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if resp.Preferences["tier"] != "pro" {
-		t.Errorf("expected tier=pro, got %q", resp.Preferences["tier"])
+	if resp.Preferences["mainChat"] != "smart" {
+		t.Errorf("expected mainChat=smart, got %v", resp.Preferences["mainChat"])
 	}
 }
 
@@ -818,7 +865,7 @@ func TestSetPreferences_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.SetPreferences(context.Background(), map[string]string{"tier": "pro"})
+	err := client.SetPreferences(context.Background(), map[string]interface{}{"mainChat": "genius"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -834,21 +881,22 @@ func TestSetPreferences_Success(t *testing.T) {
 func TestGetSecrets_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(SecretsResponse{
-			Secrets: SecretsList{
-				Required: []string{"API_KEY"},
-				Optional: []string{"DEBUG"},
+			SecretRequirements: SecretRequirements{
+				Required: []SecretEntry{{Key: "API_KEY", Label: "API Key", IsRequired: true}},
+				Optional: []SecretEntry{{Key: "DEBUG", Label: "Debug Mode"}},
 			},
+			Summary: SecretsSummary{TotalRequired: 1, TotalOptional: 1},
 		})
 	}))
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.GetSecrets(context.Background(), "proj-1")
+	resp, err := client.GetSecrets(context.Background(), "proj-1", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(resp.Secrets.Required) != 1 || resp.Secrets.Required[0] != "API_KEY" {
-		t.Errorf("unexpected required secrets: %v", resp.Secrets.Required)
+	if len(resp.SecretRequirements.Required) != 1 || resp.SecretRequirements.Required[0].Key != "API_KEY" {
+		t.Errorf("unexpected required secrets: %v", resp.SecretRequirements.Required)
 	}
 }
 
@@ -866,12 +914,16 @@ func TestSetSecrets_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.SetSecrets(context.Background(), "proj-1", map[string]string{"API_KEY": "secret"}, "production")
+	err := client.SetSecrets(context.Background(), "proj-1", map[string]string{"API_KEY": "secret"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if receivedBody["environment"] != "production" {
-		t.Errorf("expected environment=production, got %v", receivedBody["environment"])
+	secretsMap, ok := receivedBody["secrets"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected secrets in body")
+	}
+	if secretsMap["API_KEY"] != "secret" {
+		t.Errorf("expected API_KEY=secret, got %v", secretsMap["API_KEY"])
 	}
 }
 

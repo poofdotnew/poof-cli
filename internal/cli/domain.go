@@ -9,7 +9,7 @@ import (
 
 var domainCmd = &cobra.Command{
 	Use:   "domain",
-	Short: "Manage custom domains (requires credit purchase)",
+	Short: "Manage custom domains (requires membership)",
 }
 
 var domainListCmd = &cobra.Command{

@@ -36,7 +36,10 @@ var preferencesGetCmd = &cobra.Command{
 			}
 			rows := make([][]string, 0, len(resp.Preferences))
 			for k, v := range resp.Preferences {
-				rows = append(rows, []string{k, v})
+				// Skip nested objects (like modelOverrides) in table display
+				if s, ok := v.(string); ok {
+					rows = append(rows, []string{k, s})
+				}
 			}
 			output.Table([]string{"Use Case", "Tier"}, rows)
 		})
@@ -55,7 +58,7 @@ var preferencesSetCmd = &cobra.Command{
 			return err
 		}
 
-		prefs := make(map[string]string)
+		prefs := make(map[string]interface{})
 		for _, arg := range args {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 {

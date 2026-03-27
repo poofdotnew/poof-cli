@@ -36,9 +36,12 @@ var creditsBalanceCmd = &cobra.Command{
 		output.Print(resp, func() {
 			c := resp.Credits
 			output.Info("Credits:")
-			output.Info("  Daily:  %d / %d (resets %s)", c.Daily.Remaining, c.Daily.Allotted, c.Daily.ResetsAt)
-			output.Info("  Add-on: %d / %d purchased", c.AddOn.Remaining, c.AddOn.Purchased)
-			output.Info("  Total:  %d", c.Total)
+			output.Info("  Daily:        %d / %d (resets %s)", c.Daily.Remaining, c.Daily.Allotted, c.Daily.ResetsAt)
+			if c.Subscription.Purchased > 0 {
+				output.Info("  Subscription: %d / %d purchased", c.Subscription.Remaining, c.Subscription.Purchased)
+			}
+			output.Info("  Add-on:       %d / %d purchased", c.AddOn.Remaining, c.AddOn.Purchased)
+			output.Info("  Total:        %d", c.Total)
 		})
 		return nil
 	},

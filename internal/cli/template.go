@@ -17,7 +17,8 @@ var templateListCmd = &cobra.Command{
 	Short: "List available templates",
 	Example: `  poof template list
   poof template list --category defi
-  poof template list --search "nft" --json`,
+  poof template list --search "nft" --json
+  poof template list --limit 10 --skip 20`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -26,8 +27,10 @@ var templateListCmd = &cobra.Command{
 		category, _ := cmd.Flags().GetString("category")
 		search, _ := cmd.Flags().GetString("search")
 		sortBy, _ := cmd.Flags().GetString("sort")
+		limit, _ := cmd.Flags().GetInt("limit")
+		skip, _ := cmd.Flags().GetInt("skip")
 
-		resp, err := apiClient.ListTemplates(context.Background(), category, search, sortBy)
+		resp, err := apiClient.ListTemplates(context.Background(), category, search, sortBy, limit, skip)
 		if err != nil {
 			return handleError(err)
 		}
@@ -42,6 +45,9 @@ var templateListCmd = &cobra.Command{
 				rows[i] = []string{t.Name, t.Category, t.Description}
 			}
 			output.Table([]string{"Name", "Category", "Description"}, rows)
+			if resp.Pagination.HasMore {
+				output.Info("(more templates available — use --skip %d to see next page)", skip+limit)
+			}
 		})
 		return nil
 	},
@@ -50,7 +56,9 @@ var templateListCmd = &cobra.Command{
 func init() {
 	templateListCmd.Flags().String("category", "", "Filter by category")
 	templateListCmd.Flags().String("search", "", "Search query")
-	templateListCmd.Flags().String("sort", "", "Sort by field")
+	templateListCmd.Flags().String("sort", "", "Sort by: newest, most_used, staff_picks")
+	templateListCmd.Flags().Int("limit", 20, "Max templates to return")
+	templateListCmd.Flags().Int("skip", 0, "Number of templates to skip (pagination)")
 
 	templateCmd.AddCommand(templateListCmd)
 }

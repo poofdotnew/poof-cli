@@ -7,7 +7,7 @@ import (
 )
 
 type FilesResponse struct {
-	Files map[string]string `json:"files"`
+	FilesWithContent map[string]string `json:"filesWithContent"`
 }
 
 type UpdateFilesRequest struct {

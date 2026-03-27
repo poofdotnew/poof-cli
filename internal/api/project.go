@@ -19,6 +19,7 @@ type Project struct {
 
 type ListProjectsResponse struct {
 	Projects []Project `json:"projects"`
+	HasMore  bool      `json:"hasMore"`
 }
 
 type CreateProjectRequest struct {
@@ -51,6 +52,7 @@ type ProjectStatus struct {
 
 type MessagesResponse struct {
 	Messages []Message `json:"messages"`
+	HasMore  bool      `json:"hasMore"`
 }
 
 type Message struct {
@@ -127,8 +129,8 @@ func (c *Client) GetProjectStatus(ctx context.Context, projectID string) (*Proje
 	return &resp, nil
 }
 
-func (c *Client) GetMessages(ctx context.Context, projectID string) (*MessagesResponse, error) {
-	path := fmt.Sprintf("/api/project/%s/messages", projectID)
+func (c *Client) GetMessages(ctx context.Context, projectID string, limit, offset int) (*MessagesResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/messages?limit=%d&offset=%d", projectID, limit, offset)
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err

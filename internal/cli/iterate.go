@@ -41,16 +41,11 @@ var iterateCmd = &cobra.Command{
 		ctx := context.Background()
 
 		// 1. Send chat message
-		chatResp, err := apiClient.Chat(ctx, projectID, message)
+		_, err = apiClient.Chat(ctx, projectID, message)
 		if err != nil {
 			return handleError(err)
 		}
-
-		if chatResp.Queued {
-			output.Info("Message queued (AI was active). Waiting...")
-		} else {
-			output.Info("Message sent. AI is building...")
-		}
+		output.Info("Message sent. AI is building...")
 
 		// 2. Poll until AI finishes
 		err = output.WithSpinner("AI is working...", func() error {
@@ -70,7 +65,7 @@ var iterateCmd = &cobra.Command{
 		}
 
 		// 3. Check test results (may not exist for all projects)
-		results, err := apiClient.GetTestResults(ctx, projectID)
+		results, err := apiClient.GetTestResults(ctx, projectID, 0, 0)
 		if err != nil {
 			if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
 				output.Success("Done.")

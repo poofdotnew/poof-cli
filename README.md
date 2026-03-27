@@ -13,7 +13,7 @@
 
 A command-line tool for building, deploying, and managing Solana dApps on [poof.new](https://poof.new).
 
-Single binary. No Node.js. No browser. All 30 Poof platform operations from your terminal.
+Single binary. No Node.js. No browser. All Poof platform operations from your terminal.
 
 ## Install
 
@@ -376,7 +376,7 @@ poof ship -p $PROJECT -t preview
 
 - Free tier: ~10 daily credits (resets daily)
 - `poof credits balance` is free and shows your balance
-- Deployment and some features require at least one credit purchase
+- Deployment, file access, and custom domains require a membership
 - `poof credits topup` initiates the x402 USDC payment flow
 
 ## Development

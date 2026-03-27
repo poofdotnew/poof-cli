@@ -13,6 +13,7 @@ var logsCmd = &cobra.Command{
 	Short: "Get runtime logs for a deployed project",
 	Example: `  poof logs -p <id>
   poof logs -p <id> --environment preview --limit 50
+  poof logs -p <id> --offset 50
   poof logs -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -26,8 +27,9 @@ var logsCmd = &cobra.Command{
 
 		environment, _ := cmd.Flags().GetString("environment")
 		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
 
-		resp, err := apiClient.GetLogs(context.Background(), projectID, environment, limit)
+		resp, err := apiClient.GetLogs(context.Background(), projectID, environment, limit, offset)
 		if err != nil {
 			return handleError(err)
 		}
@@ -40,12 +42,19 @@ var logsCmd = &cobra.Command{
 			for _, l := range resp.Logs {
 				fmt.Printf("[%s] %s: %s\n", l.Timestamp, l.Level, l.Message)
 			}
+			if resp.TotalCount > len(resp.Logs) {
+				output.Info("\nShowing %d of %d total log entries.", len(resp.Logs), resp.TotalCount)
+			}
+			if resp.HasMore {
+				output.Info("(more logs available — use --offset %d to see next page)", offset+limit)
+			}
 		})
 		return nil
 	},
 }
 
 func init() {
-	logsCmd.Flags().String("environment", "", "Filter by environment")
-	logsCmd.Flags().Int("limit", 100, "Max log entries")
+	logsCmd.Flags().String("environment", "", "Filter by environment: development, mainnet-preview, production")
+	logsCmd.Flags().Int("limit", 50, "Max log entries (server max: 50)")
+	logsCmd.Flags().Int("offset", 0, "Offset for pagination")
 }

@@ -15,16 +15,22 @@ type LogEntry struct {
 }
 
 type LogsResponse struct {
-	Logs []LogEntry `json:"logs"`
+	Logs       []LogEntry `json:"logs"`
+	TotalCount int        `json:"totalCount"`
+	HasMore    bool       `json:"hasMore"`
+	ScriptName string     `json:"scriptName"`
 }
 
-func (c *Client) GetLogs(ctx context.Context, projectID, environment string, limit int) (*LogsResponse, error) {
+func (c *Client) GetLogs(ctx context.Context, projectID, environment string, limit, offset int) (*LogsResponse, error) {
 	params := url.Values{}
 	if environment != "" {
 		params.Set("environment", environment)
 	}
 	if limit > 0 {
 		params.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		params.Set("offset", strconv.Itoa(offset))
 	}
 
 	path := fmt.Sprintf("/api/project/%s/logs", projectID)
