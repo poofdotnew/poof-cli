@@ -138,7 +138,12 @@ var projectUpdateCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Project %s updated.", projectID)
+		output.Print(map[string]interface{}{
+			"success":   true,
+			"projectId": projectID,
+		}, func() {
+			output.Success("Project %s updated.", projectID)
+		})
 		return nil
 	},
 }
@@ -174,7 +179,12 @@ var projectDeleteCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Project %s deleted.", projectID)
+		output.Print(map[string]interface{}{
+			"success":   true,
+			"projectId": projectID,
+		}, func() {
+			output.Success("Project %s deleted.", projectID)
+		})
 		return nil
 	},
 }

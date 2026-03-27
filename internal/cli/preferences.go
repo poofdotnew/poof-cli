@@ -78,7 +78,9 @@ var preferencesSetCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Preferences updated.")
+		output.Print(map[string]bool{"success": true}, func() {
+			output.Success("Preferences updated.")
+		})
 		return nil
 	},
 }

@@ -126,10 +126,10 @@ func TestGetCredits_Success(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if resp.Credits.Total != 110 {
-		t.Errorf("expected Total=110, got %d", resp.Credits.Total)
+		t.Errorf("expected Total=110, got %v", resp.Credits.Total)
 	}
 	if resp.Credits.Daily.Remaining != 10 {
-		t.Errorf("expected Daily.Remaining=10, got %d", resp.Credits.Daily.Remaining)
+		t.Errorf("expected Daily.Remaining=10, got %v", resp.Credits.Daily.Remaining)
 	}
 }
 

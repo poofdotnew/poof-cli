@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
+	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/spf13/cobra"
 )
 
@@ -33,6 +35,10 @@ var shipCmd = &cobra.Command{
 		if target == "" {
 			target = "preview"
 		}
+		validTargets := map[string]bool{"preview": true, "production": true, "mobile": true}
+		if !validTargets[target] {
+			return fmt.Errorf("invalid target %q (valid: preview, production, mobile)", target)
+		}
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		yes, _ := cmd.Flags().GetBool("yes")
 
@@ -42,8 +48,10 @@ var shipCmd = &cobra.Command{
 
 		ctx := context.Background()
 
-		// 1. Security scan (async — initiates scan)
-		output.Info("Initiating security scan...")
+		// 1. Security scan — initiate and wait for completion
+		if output.GetFormat() == output.FormatText {
+			output.Info("Initiating security scan...")
+		}
 		var scanResult *api.SecurityScanResponse
 		err = output.WithSpinner("Scanning...", func() error {
 			var scanErr error
@@ -53,7 +61,42 @@ var shipCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("security scan failed: %w", err)
 		}
-		output.Success("Security scan initiated (task: %s).", scanResult.TaskID)
+		if output.GetFormat() == output.FormatText {
+			output.Success("Security scan initiated (task: %s).", scanResult.TaskID)
+		}
+
+		// Wait for the security scan task to complete
+		if scanResult.TaskID != "" {
+			err = output.WithSpinner("Waiting for security scan to complete...", func() error {
+				scanPollCfg := poll.Config{
+					InitialDelay:      3 * time.Second,
+					MaxDelay:          10 * time.Second,
+					BackoffFactor:     1.3,
+					Timeout:           5 * time.Minute,
+					MaxConsecutiveErr: 5,
+				}
+				return poll.Poll(ctx, scanPollCfg, func(ctx context.Context) (bool, error) {
+					task, err := apiClient.GetTask(ctx, projectID, scanResult.TaskID)
+					if err != nil {
+						return false, err
+					}
+					switch task.Task.Status {
+					case "completed":
+						return true, nil
+					case "failed":
+						return false, fmt.Errorf("security scan task failed")
+					default:
+						return false, nil
+					}
+				})
+			})
+			if err != nil {
+				return fmt.Errorf("security scan failed: %w", err)
+			}
+			if output.GetFormat() == output.FormatText {
+				output.Success("Security scan completed.")
+			}
+		}
 
 		// 2. Check eligibility
 		eligibility, err := apiClient.CheckPublishEligibility(ctx, projectID)
@@ -61,16 +104,29 @@ var shipCmd = &cobra.Command{
 			return handleError(err)
 		}
 		if !eligibility.Eligible() {
+			if eligibility.Status == "no_membership" {
+				return fmt.Errorf("not eligible for deployment: a credit purchase is required. Run 'poof credits topup' first")
+			}
 			return fmt.Errorf("not eligible for deployment (%s): %s", eligibility.Status, eligibility.Message)
 		}
-		output.Success("Eligible for deployment.")
+		if output.GetFormat() == output.FormatText {
+			output.Success("Eligible for deployment.")
+		}
 
 		// 3. Deploy
 		if dryRun {
-			output.Info("Would deploy project %s to %s. No changes made.", projectID, target)
+			output.Print(map[string]interface{}{
+				"dryRun":    true,
+				"projectId": projectID,
+				"target":    target,
+			}, func() {
+				output.Info("Would deploy project %s to %s. No changes made.", projectID, target)
+			})
 			return nil
 		}
-		output.Info("Deploying to %s...", target)
+		if output.GetFormat() == output.FormatText {
+			output.Info("Deploying to %s...", target)
+		}
 
 		switch target {
 		case "preview":
@@ -148,22 +204,24 @@ var shipCmd = &cobra.Command{
 			}
 		}
 
-		output.Success("Deployed to %s!", target)
-
 		// 4. Get updated status for URLs
 		status, err := apiClient.GetProjectStatus(ctx, projectID)
 		if err == nil {
-			output.Print(map[string]interface{}{
-				"target":    target,
-				"projectId": projectID,
-				"urls":      status.URLs,
-			}, func() {
-				for name, url := range status.URLs {
-					if url != "" {
-						output.Info("  %s: %s", name, url)
+			if output.GetFormat() == output.FormatQuiet {
+				output.Quiet(projectID)
+			} else {
+				output.Print(map[string]interface{}{
+					"target":    target,
+					"projectId": projectID,
+					"urls":      status.URLs,
+				}, func() {
+					for name, url := range status.URLs {
+						if url != "" {
+							output.Info("  %s: %s", name, url)
+						}
 					}
-				}
-			})
+				})
+			}
 		}
 
 		return nil

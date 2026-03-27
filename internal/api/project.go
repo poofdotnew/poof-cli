@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,6 +50,14 @@ type Project struct {
 type ListProjectsResponse struct {
 	Projects []Project `json:"projects"`
 	HasMore  bool      `json:"hasMore"`
+}
+
+func (r *ListProjectsResponse) QuietString() string {
+	ids := make([]string, len(r.Projects))
+	for i, p := range r.Projects {
+		ids[i] = p.ID
+	}
+	return strings.Join(ids, "\n")
 }
 
 type CreateProjectRequest struct {
@@ -106,6 +115,14 @@ type ProjectStatus struct {
 	PublishState   map[string]interface{} `json:"publishState"`
 	URLs           map[string]string      `json:"urls"`
 	ConnectionInfo *ConnectionInfo        `json:"connectionInfo,omitempty"`
+}
+
+func (r *ProjectStatus) QuietString() string {
+	parts := []string{r.Project.ID}
+	if u, ok := r.URLs["draft"]; ok && u != "" {
+		parts = append(parts, u)
+	}
+	return strings.Join(parts, "\n")
 }
 
 type MessagesResponse struct {

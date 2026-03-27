@@ -26,9 +26,10 @@ var (
 
 // rootCmd is the top-level poof command.
 var rootCmd = &cobra.Command{
-	Use:     "poof",
-	Short:   "Poof CLI — build, deploy, and manage Solana dApps on poof.new",
-	Version: version.Short(),
+	Use:          "poof",
+	Short:        "Poof CLI — build, deploy, and manage Solana dApps on poof.new",
+	Version:      version.Short(),
+	SilenceUsage: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Load config
 		var err error

@@ -58,6 +58,11 @@ var authStatusCmd = &cobra.Command{
 			status = "expired"
 		}
 
+		if output.GetFormat() == output.FormatQuiet {
+			output.Quiet(cached.Wallet)
+			return nil
+		}
+
 		output.Print(map[string]interface{}{
 			"wallet":    cached.Wallet,
 			"env":       cached.Environment,
@@ -83,7 +88,9 @@ var authLogoutCmd = &cobra.Command{
 		if err := auth.ClearCachedTokens(); err != nil {
 			return fmt.Errorf("failed to clear credentials: %w", err)
 		}
-		output.Success("Logged out. Cached credentials cleared.")
+		output.Print(map[string]bool{"success": true}, func() {
+			output.Success("Logged out. Cached credentials cleared.")
+		})
 		return nil
 	},
 }

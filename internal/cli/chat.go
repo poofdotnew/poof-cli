@@ -101,7 +101,9 @@ var chatCancelCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("AI execution canceled.")
+		output.Print(map[string]bool{"success": true}, func() {
+			output.Success("AI execution canceled.")
+		})
 		return nil
 	},
 }
@@ -135,7 +137,9 @@ var chatSteerCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Steering message sent.")
+		output.Print(map[string]bool{"success": true}, func() {
+			output.Success("Steering message sent.")
+		})
 		return nil
 	},
 }

@@ -26,6 +26,13 @@ type AIActiveResponse struct {
 	Status string `json:"status"`
 }
 
+func (r *AIActiveResponse) QuietString() string {
+	if r.Active {
+		return "active"
+	}
+	return "inactive"
+}
+
 type SteerRequest struct {
 	Message   string `json:"message"`
 	MessageID string `json:"messageId,omitempty"`

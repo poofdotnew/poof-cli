@@ -102,7 +102,12 @@ var secretsSetCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Set %d secret(s).", len(secrets))
+		output.Print(map[string]interface{}{
+			"success": true,
+			"count":   len(secrets),
+		}, func() {
+			output.Success("Set %d secret(s).", len(secrets))
+		})
 		return nil
 	},
 }

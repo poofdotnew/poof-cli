@@ -17,7 +17,7 @@ var filesCmd = &cobra.Command{
 
 var filesGetCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Get all source files (requires membership)",
+	Short: "Get all source files (requires credit purchase)",
 	Example: `  poof files get -p <id>
   poof files get -p <id> --json | jq 'keys'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,7 +86,12 @@ var filesUpdateCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Updated %d file(s).", len(files))
+		output.Print(map[string]interface{}{
+			"success": true,
+			"count":   len(files),
+		}, func() {
+			output.Success("Updated %d file(s).", len(files))
+		})
 		return nil
 	},
 }

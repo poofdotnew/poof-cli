@@ -121,6 +121,7 @@ Creates a project, waits for the AI to finish building, and prints the draft URL
 | `-m, --message` | (required) | What to build |
 | `--mode` | `full` | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy` |
 | `--public` | `true` | Make project publicly visible |
+| `--stdin` | `false` | Read message from stdin |
 
 #### `poof iterate` — Chat and check results
 
@@ -134,9 +135,10 @@ Sends a chat message, waits for the AI to finish, and shows test results if any 
 #### `poof ship` — Scan, check, and deploy
 
 ```bash
-poof ship -p <id>                    # deploy to preview (default)
-poof ship -p <id> -t production      # deploy to production
-poof ship -p <id> -t mobile          # publish mobile app
+poof ship -p <id> --signed-permit <tx>            # deploy to preview (default)
+poof ship -p <id> -t production --yes             # deploy to production
+poof ship -p <id> -t mobile --platform ios --app-name "My App" --app-icon-url https://...
+poof ship -p <id> --dry-run                       # scan + check without deploying
 ```
 
 Runs a security scan, checks publish eligibility, and deploys.
@@ -149,7 +151,7 @@ poof project create -m "Build a ..."           # create a project
 poof project status -p <id>                    # get status, URLs, deploy info
 poof project messages -p <id>                  # view conversation history
 poof project update -p <id> --title "My App"   # update metadata
-poof project delete -p <id>                    # delete (irreversible)
+poof project delete -p <id> --yes               # delete (irreversible)
 ```
 
 ### AI Chat
@@ -172,10 +174,10 @@ poof files update -p <id> --from-json files.json          # bulk update from JSO
 ### Deployment
 
 ```bash
-poof deploy check -p <id>              # check publish eligibility
-poof deploy preview -p <id>            # deploy to mainnet preview
-poof deploy production -p <id>         # deploy to production
-poof deploy mobile -p <id>            # publish mobile app
+poof deploy check -p <id>                          # check publish eligibility
+poof deploy preview -p <id> --signed-permit <tx>   # deploy to mainnet preview
+poof deploy production -p <id> --yes               # deploy to production
+poof deploy mobile -p <id> --platform ios --app-name "My App" --app-icon-url https://...
 poof deploy static -p <id> --archive dist.tar.gz   # deploy pre-built static frontend
 poof deploy download -p <id>           # start code export
 poof deploy download-url -p <id> --task <taskId>   # get download link
@@ -206,8 +208,8 @@ poof security scan -p <id>            # run security audit
 
 ```bash
 poof secrets get -p <id>                                       # list required/optional secrets
+poof secrets get -p <id> --environment production              # filter by environment
 poof secrets set -p <id> API_KEY=sk-123 DB_URL=postgres://...  # set secret values
-poof secrets set -p <id> --environment preview API_KEY=sk-456  # per-environment
 ```
 
 ### Custom Domains
@@ -304,7 +306,7 @@ poof project list --quiet
 | Environment | Base URL | Use case |
 |---|---|---|
 | `production` | `https://poof.new` | Live apps (default) |
-| `staging` | `https://staging.poof.new` | Testing |
+| `staging` | `https://v2-staging.poof.new` | Testing |
 | `local` | `http://localhost:3000` | Local development |
 
 Switch environments:
@@ -377,7 +379,7 @@ poof ship -p $PROJECT -t preview
 
 - Free tier: ~10 daily credits (resets daily)
 - `poof credits balance` is free and shows your balance
-- Deployment, file access, and custom domains require a membership
+- Deployment, file access, and custom domains require a credit purchase
 - `poof credits topup` initiates the x402 USDC payment flow
 
 ## Development

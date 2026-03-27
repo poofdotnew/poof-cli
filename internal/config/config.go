@@ -34,17 +34,18 @@ func Load() (*Config, error) {
 	}
 	v.AutomaticEnv()
 
-	v.SetDefault("POOF_ENV", "production")
-	v.SetDefault("OUTPUT_FORMAT", "text")
+	// Defaults are handled by coalesce() below so that config-file keys
+	// ("environment", "output_format") are not shadowed by viper defaults
+	// set against the env-var key ("POOF_ENV", "OUTPUT_FORMAT").
 
 	_ = v.ReadInConfig()
 
 	cfg := &Config{
 		SolanaPrivateKey: coalesce(v.GetString("SOLANA_PRIVATE_KEY"), os.Getenv("SOLANA_PRIVATE_KEY")),
 		WalletAddress:    coalesce(v.GetString("SOLANA_WALLET_ADDRESS"), os.Getenv("SOLANA_WALLET_ADDRESS")),
-		PoofEnv:          coalesce(v.GetString("POOF_ENV"), os.Getenv("POOF_ENV"), "production"),
+		PoofEnv:          coalesce(v.GetString("POOF_ENV"), v.GetString("environment"), os.Getenv("POOF_ENV"), "production"),
 		BypassToken:      coalesce(v.GetString("VERCEL_BYPASS_TOKEN"), os.Getenv("VERCEL_BYPASS_TOKEN")),
-		OutputFormat:     coalesce(v.GetString("OUTPUT_FORMAT"), "text"),
+		OutputFormat:     coalesce(v.GetString("OUTPUT_FORMAT"), v.GetString("output_format"), "text"),
 		DefaultProject:   v.GetString("default_project_id"),
 		SolanaRPCURL:     coalesce(v.GetString("SOLANA_RPC_URL"), os.Getenv("SOLANA_RPC_URL"), "https://api.mainnet-beta.solana.com"),
 	}

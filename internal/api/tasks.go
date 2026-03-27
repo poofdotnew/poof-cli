@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 )
 
 type TasksResponse struct {
@@ -28,15 +29,38 @@ type TestResultsResponse struct {
 	HasMore bool         `json:"hasMore"`
 }
 
+func (r *TestResultsResponse) QuietString() string {
+	return strconv.Itoa(r.Summary.Passed) + "/" + strconv.Itoa(r.Summary.Total) + " passed"
+}
+
 type TestResult struct {
-	ID        string     `json:"id"`
-	FileName  string     `json:"fileName"`
-	TestName  string     `json:"testName"`
-	Status    string     `json:"status"`
-	Counts    TestCounts `json:"counts"`
-	LastError string     `json:"lastError"`
-	Duration  float64    `json:"duration"`
-	StartedAt string     `json:"startedAt"`
+	ID        string          `json:"id"`
+	FileName  string          `json:"fileName"`
+	TestName  string          `json:"testName"`
+	Status    string          `json:"status"`
+	Counts    TestCounts      `json:"counts"`
+	LastError string          `json:"lastError"`
+	Duration  float64         `json:"duration"`
+	StartedAt json.RawMessage `json:"startedAt"`
+}
+
+// StartedAtString returns the startedAt value as a string, handling both
+// numeric (epoch ms) and string (ISO 8601) formats from the server.
+func (r *TestResult) StartedAtString() string {
+	if len(r.StartedAt) == 0 {
+		return ""
+	}
+	// Try string first
+	var s string
+	if err := json.Unmarshal(r.StartedAt, &s); err == nil {
+		return s
+	}
+	// Try number (epoch ms)
+	var n float64
+	if err := json.Unmarshal(r.StartedAt, &n); err == nil {
+		return strconv.FormatInt(int64(n), 10)
+	}
+	return string(r.StartedAt)
 }
 
 type TestCounts struct {

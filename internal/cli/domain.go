@@ -9,7 +9,7 @@ import (
 
 var domainCmd = &cobra.Command{
 	Use:   "domain",
-	Short: "Manage custom domains (requires membership)",
+	Short: "Manage custom domains (requires credit purchase)",
 }
 
 var domainListCmd = &cobra.Command{
@@ -72,10 +72,16 @@ var domainAddCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Success("Domain %s added.", args[0])
-		if isDefault {
-			output.Info("Set as default domain.")
-		}
+		output.Print(map[string]interface{}{
+			"success":   true,
+			"domain":    args[0],
+			"isDefault": isDefault,
+		}, func() {
+			output.Success("Domain %s added.", args[0])
+			if isDefault {
+				output.Info("Set as default domain.")
+			}
+		})
 		return nil
 	},
 }

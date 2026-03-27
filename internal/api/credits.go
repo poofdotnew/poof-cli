@@ -5,33 +5,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 )
 
 type CreditsResponse struct {
 	Credits CreditDetails `json:"credits"`
 }
 
+func (r *CreditsResponse) QuietString() string {
+	return strconv.FormatFloat(r.Credits.Total, 'f', 0, 64)
+}
+
 type CreditDetails struct {
 	Daily        DailyCredits        `json:"daily"`
 	Subscription SubscriptionCredits `json:"subscription"`
 	AddOn        AddOnCredits        `json:"addOn"`
-	Total        int                 `json:"total"`
+	Total        float64             `json:"total"`
 }
 
 type SubscriptionCredits struct {
-	Remaining int `json:"remaining"`
-	Purchased int `json:"purchased"`
+	Remaining float64 `json:"remaining"`
+	Purchased float64 `json:"purchased"`
 }
 
 type DailyCredits struct {
-	Remaining int    `json:"remaining"`
-	Allotted  int    `json:"allotted"`
-	ResetsAt  string `json:"resetsAt"`
+	Remaining float64 `json:"remaining"`
+	Allotted  float64 `json:"allotted"`
+	ResetsAt  string  `json:"resetsAt"`
 }
 
 type AddOnCredits struct {
-	Remaining int `json:"remaining"`
-	Purchased int `json:"purchased"`
+	Remaining float64 `json:"remaining"`
+	Purchased float64 `json:"purchased"`
 }
 
 // x402 payment types

@@ -49,9 +49,28 @@ func TestAPIError_IsPaymentRequired(t *testing.T) {
 }
 
 func TestAPIError_IsCreditsExhausted(t *testing.T) {
+	// Exact old message
 	err := &APIError{Message: "You have run out of credits"}
 	if !err.IsCreditsExhausted() {
-		t.Error("expected IsCreditsExhausted() to be true")
+		t.Error("expected IsCreditsExhausted() to be true for exact match")
+	}
+
+	// Server message with extra text
+	err1b := &APIError{Message: "You have run out of free credits. Purchase credits to continue using Poof."}
+	if !err1b.IsCreditsExhausted() {
+		t.Error("expected IsCreditsExhausted() to be true for 'run out of free credits'")
+	}
+
+	// creditsRequired field
+	err1c := &APIError{Message: "some error", CreditsRequired: true}
+	if !err1c.IsCreditsExhausted() {
+		t.Error("expected IsCreditsExhausted() to be true when creditsRequired=true")
+	}
+
+	// Insufficient credits
+	err1d := &APIError{Message: "Insufficient credits. Need 1 more credits."}
+	if !err1d.IsCreditsExhausted() {
+		t.Error("expected IsCreditsExhausted() to be true for 'Insufficient credits'")
 	}
 
 	err2 := &APIError{Message: "other error"}

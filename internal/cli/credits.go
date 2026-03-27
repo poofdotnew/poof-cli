@@ -36,12 +36,12 @@ var creditsBalanceCmd = &cobra.Command{
 		output.Print(resp, func() {
 			c := resp.Credits
 			output.Info("Credits:")
-			output.Info("  Daily:        %d / %d (resets %s)", c.Daily.Remaining, c.Daily.Allotted, c.Daily.ResetsAt)
+			output.Info("  Daily:        %.4g / %.4g (resets %s)", c.Daily.Remaining, c.Daily.Allotted, c.Daily.ResetsAt)
 			if c.Subscription.Purchased > 0 {
-				output.Info("  Subscription: %d / %d purchased", c.Subscription.Remaining, c.Subscription.Purchased)
+				output.Info("  Subscription: %.4g / %.4g purchased", c.Subscription.Remaining, c.Subscription.Purchased)
 			}
-			output.Info("  Add-on:       %d / %d purchased", c.AddOn.Remaining, c.AddOn.Purchased)
-			output.Info("  Total:        %d", c.Total)
+			output.Info("  Add-on:       %.4g / %.4g purchased", c.AddOn.Remaining, c.AddOn.Purchased)
+			output.Info("  Total:        %.4g", c.Total)
 		})
 		return nil
 	},
@@ -74,7 +74,9 @@ A completed purchase also unlocks paid features (deployment, downloads, etc.).`,
 		ctx := context.Background()
 
 		// Phase 1: Get payment requirements
-		output.Info("Requesting payment requirements...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Requesting payment requirements...")
+		}
 		reqs, err := apiClient.TopupPhase1(ctx, quantity)
 		if err != nil {
 			return handleError(err)
@@ -90,28 +92,36 @@ A completed purchase also unlocks paid features (deployment, downloads, etc.).`,
 		}
 		amountUsdc /= 1e6 // Convert atomic units to USDC
 
-		output.Info("Payment required:")
-		output.Info("  Amount:    $%.2f USDC", amountUsdc)
-		output.Info("  Credits:   %d", reqs.Credits)
-		output.Info("  Pay to:    %s", accept.PayTo)
-		output.Info("  Facilitator: %s", accept.Extra.FeePayer)
+		if output.GetFormat() == output.FormatText {
+			output.Info("Payment required:")
+			output.Info("  Amount:    $%.2f USDC", amountUsdc)
+			output.Info("  Credits:   %d", reqs.Credits)
+			output.Info("  Pay to:    %s", accept.PayTo)
+			output.Info("  Facilitator: %s", accept.Extra.FeePayer)
+		}
 
 		// Get recent blockhash from Solana RPC
-		output.Info("Fetching recent blockhash...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Fetching recent blockhash...")
+		}
 		blockhash, err := getRecentBlockhash(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to get blockhash: %w", err)
 		}
 
 		// Phase 2: Build and sign transaction
-		output.Info("Building payment transaction...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Building payment transaction...")
+		}
 		paymentHeader, err := x402.BuildPayment(cfg.SolanaPrivateKey, reqs, blockhash)
 		if err != nil {
 			return fmt.Errorf("failed to build payment: %w", err)
 		}
 
 		// Phase 3: Submit payment
-		output.Info("Submitting payment...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Submitting payment...")
+		}
 		result, err := apiClient.TopupPhase2(ctx, quantity, paymentHeader)
 		if err != nil {
 			return handleError(err)

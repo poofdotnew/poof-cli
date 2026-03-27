@@ -84,7 +84,12 @@ var configSetCmd = &cobra.Command{
 			return fmt.Errorf("failed to write config: %w", err)
 		}
 
-		output.Success("Set %s = %s", key, value)
+		output.Print(map[string]string{
+			"key":   key,
+			"value": value,
+		}, func() {
+			output.Success("Set %s = %s", key, value)
+		})
 		return nil
 	},
 }

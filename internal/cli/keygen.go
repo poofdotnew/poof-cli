@@ -31,6 +31,11 @@ var keygenCmd = &cobra.Command{
 		privateKeyB58 := base58.Encode(secretKey)
 		walletAddress := base58.Encode(pub)
 
+		if output.GetFormat() == output.FormatQuiet {
+			fmt.Printf("SOLANA_PRIVATE_KEY=%s\n", privateKeyB58)
+			fmt.Printf("SOLANA_WALLET_ADDRESS=%s\n", walletAddress)
+			return nil
+		}
 		output.Print(map[string]string{
 			"privateKey":    privateKeyB58,
 			"walletAddress": walletAddress,

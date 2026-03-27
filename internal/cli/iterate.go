@@ -45,7 +45,9 @@ var iterateCmd = &cobra.Command{
 		if err != nil {
 			return handleError(err)
 		}
-		output.Info("Message sent. AI is building...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Message sent. AI is building...")
+		}
 
 		// 2. Poll until AI finishes
 		err = output.WithSpinner("AI is working...", func() error {
@@ -68,7 +70,13 @@ var iterateCmd = &cobra.Command{
 		results, err := apiClient.GetTestResults(ctx, projectID, 100, 0)
 		if err != nil {
 			if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
-				output.Success("Done.")
+				output.Print(map[string]interface{}{
+					"success": true,
+					"results": []interface{}{},
+					"summary": map[string]int{"total": 0, "passed": 0, "failed": 0, "errors": 0, "running": 0},
+				}, func() {
+					output.Success("Done.")
+				})
 				return nil
 			}
 			return handleError(err)

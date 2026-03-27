@@ -37,15 +37,20 @@ var deployCheckCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Print(resp, func() {
-			if resp.Eligible() {
-				output.Success("Project is eligible for deployment.")
-			}
-		})
-
 		if !resp.Eligible() {
+			if output.GetFormat() == output.FormatJSON {
+				output.JSON(resp)
+				cmd.SilenceErrors = true
+			}
+			if resp.Status == "no_membership" {
+				return fmt.Errorf("not eligible for deployment: a credit purchase is required. Run 'poof credits topup' first")
+			}
 			return fmt.Errorf("not eligible for deployment (%s): %s", resp.Status, resp.Message)
 		}
+
+		output.Print(resp, func() {
+			output.Success("Project is eligible for deployment.")
+		})
 		return nil
 	},
 }

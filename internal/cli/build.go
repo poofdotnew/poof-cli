@@ -40,7 +40,9 @@ var buildCmd = &cobra.Command{
 		ctx := context.Background()
 
 		// 1. Create project
-		output.Info("Creating project...")
+		if output.GetFormat() == output.FormatText {
+			output.Info("Creating project...")
+		}
 		req := api.CreateProjectRequest{
 			FirstMessage:   message,
 			IsPublic:       isPublic,
@@ -51,7 +53,9 @@ var buildCmd = &cobra.Command{
 			return handleError(err)
 		}
 		projectID := createResp.ProjectID
-		output.Success("Project created: %s", projectID)
+		if output.GetFormat() == output.FormatText {
+			output.Success("Project created: %s", projectID)
+		}
 
 		// 2. Poll until AI finishes
 		err = output.WithSpinner("AI is building...", func() error {
@@ -67,7 +71,9 @@ var buildCmd = &cobra.Command{
 			})
 		})
 		if err != nil {
-			output.Info("Project ID: %s (you can check status with 'poof project status -p %s')", projectID, projectID)
+			if output.GetFormat() == output.FormatText {
+				output.Info("Project ID: %s (you can check status with 'poof project status -p %s')", projectID, projectID)
+			}
 			return fmt.Errorf("build timed out or failed: %w", err)
 		}
 
@@ -77,20 +83,35 @@ var buildCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Print(map[string]interface{}{
-			"projectId": projectID,
-			"urls":      status.URLs,
-			"project":   status.Project,
-		}, func() {
-			output.Success("Build complete!")
-			output.Info("Project ID: %s", projectID)
-			if draft, ok := status.URLs["draft"]; ok && draft != "" {
-				output.Info("Draft URL:  %s", draft)
-			}
-			if preview, ok := status.URLs["preview"]; ok && preview != "" {
-				output.Info("Preview:    %s", preview)
-			}
-		})
+		// Build a response struct for JSON output while also supporting quiet mode
+		type buildResult struct {
+			ProjectID string            `json:"projectId"`
+			URLs      map[string]string `json:"urls"`
+			Project   api.Project       `json:"project"`
+		}
+		result := &buildResult{
+			ProjectID: projectID,
+			URLs:      status.URLs,
+			Project:   status.Project,
+		}
+
+		if output.GetFormat() == output.FormatQuiet {
+			output.Quiet(projectID)
+		} else {
+			output.Print(result, func() {
+				output.Success("Build complete!")
+				output.Info("Project ID: %s", projectID)
+				if draft, ok := status.URLs["draft"]; ok && draft != "" {
+					output.Info("Draft:   %s", draft)
+				}
+				if preview, ok := status.URLs["mainnetPreview"]; ok && preview != "" {
+					output.Info("Preview: %s", preview)
+				}
+				if prod, ok := status.URLs["production"]; ok && prod != "" {
+					output.Info("Prod:    %s", prod)
+				}
+			})
+		}
 		return nil
 	},
 }
