@@ -16,7 +16,7 @@ var Environments = map[string]Environment{
 	},
 	"staging": {
 		AppID:   "6993d4b0b2b6ac08cd334dfb",
-		BaseURL: "https://staging.poof.new",
+		BaseURL: "https://v2-staging.poof.new",
 		AuthURL: "https://auth-staging.tarobase.com",
 	},
 	"local": {

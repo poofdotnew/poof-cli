@@ -4,9 +4,38 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+// Timestamp handles JSON values that may be either a string or a number (epoch ms).
+type Timestamp string
+
+func (t *Timestamp) UnmarshalJSON(data []byte) error {
+	// Try string first
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*t = Timestamp(s)
+		return nil
+	}
+
+	// Try number (epoch ms)
+	var n float64
+	if err := json.Unmarshal(data, &n); err == nil {
+		ts := time.UnixMilli(int64(n))
+		*t = Timestamp(ts.Format(time.RFC3339))
+		return nil
+	}
+
+	// Fallback: store raw
+	*t = Timestamp(string(data))
+	return nil
+}
+
+func (t Timestamp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(string(t))
+}
 
 // Project represents a Poof project.
 type Project struct {
@@ -56,11 +85,11 @@ type MessagesResponse struct {
 }
 
 type Message struct {
-	ID        string `json:"id"`
-	Role      string `json:"role"`
-	Content   string `json:"content"`
-	CreatedAt string `json:"createdAt"`
-	Status    string `json:"status"`
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Content   string    `json:"content"`
+	CreatedAt Timestamp `json:"createdAt"`
+	Status    string    `json:"status"`
 }
 
 func (c *Client) ListProjects(ctx context.Context, limit, offset int) (*ListProjectsResponse, error) {

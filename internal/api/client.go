@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/auth"
 	"github.com/poofdotnew/poof-cli/internal/config"
@@ -113,6 +114,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, body interf
 
 	if c.BypassToken != "" {
 		req.Header.Set("x-vercel-protection-bypass", c.BypassToken)
+		req.AddCookie(&http.Cookie{Name: "_vercel_jwt", Value: c.BypassToken})
 	}
 
 	for k, v := range extraHeaders {
@@ -170,10 +172,14 @@ func (c *Client) doWithTokenBody(ctx context.Context, method, path string, build
 func parseAPIError(body []byte, statusCode int) error {
 	var apiErr APIError
 	if err := json.Unmarshal(body, &apiErr); err != nil {
-		// If we can't parse the error, return a generic one
+		// If we can't parse the error, return a generic one with truncated message
+		msg := string(body)
+		if len(msg) > 200 || strings.Contains(msg, "<!") {
+			msg = fmt.Sprintf("server returned non-JSON response (HTTP %d)", statusCode)
+		}
 		apiErr = APIError{
 			StatusCode: statusCode,
-			Message:    string(body),
+			Message:    msg,
 		}
 	}
 	apiErr.StatusCode = statusCode
