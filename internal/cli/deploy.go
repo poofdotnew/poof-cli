@@ -248,17 +248,37 @@ var deployStaticCmd = &cobra.Command{
 			return nil
 		}
 
-		resp, err := apiClient.DeployStatic(context.Background(), projectID, archive, title, description)
+		ctx := context.Background()
+		resp, err := apiClient.DeployStatic(ctx, projectID, archive, title, description)
 		if err != nil {
 			return handleError(err)
 		}
 
-		output.Print(resp, func() {
-			output.Success("Static frontend deployed.")
-			if resp.BundleURL != "" {
-				output.Info("  URL: %s", resp.BundleURL)
-			}
-		})
+		// Match existing deploy pattern: get URLs after deploy
+		status, sErr := apiClient.GetProjectStatus(ctx, projectID)
+		if sErr == nil {
+			output.Print(map[string]interface{}{
+				"target":    "static",
+				"projectId": projectID,
+				"taskId":    resp.TaskID,
+				"bundleUrl": resp.BundleURL,
+				"urls":      status.URLs,
+			}, func() {
+				output.Success("Static frontend deployed.")
+				for name, url := range status.URLs {
+					if url != "" {
+						output.Info("  %s: %s", name, url)
+					}
+				}
+			})
+		} else {
+			output.Print(resp, func() {
+				output.Success("Static frontend deployed.")
+				if resp.BundleURL != "" {
+					output.Info("  URL: %s", resp.BundleURL)
+				}
+			})
+		}
 		return nil
 	},
 }

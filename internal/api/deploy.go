@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 )
 
 // PublishEligibility matches the server's nested response shape.
@@ -106,45 +108,81 @@ type StaticDeployResponse struct {
 func (r *StaticDeployResponse) QuietString() string { return r.BundleURL }
 
 type staticDeployEnvelope struct {
-	Success bool                `json:"success"`
+	Success bool                 `json:"success"`
 	Data    StaticDeployResponse `json:"data"`
-	Error   string              `json:"error,omitempty"`
+	Error   string               `json:"error,omitempty"`
+}
+
+type uploadURLEnvelope struct {
+	Success bool `json:"success"`
+	Data    struct {
+		UploadURL string `json:"uploadUrl"`
+		TaskID    string `json:"taskId"`
+		S3Key     string `json:"s3Key"`
+		MaxSize   int    `json:"maxSize"`
+		ExpiresIn int    `json:"expiresIn"`
+	} `json:"data"`
+	Error string `json:"error,omitempty"`
 }
 
 // DeployStatic uploads a pre-built static frontend (tar.gz) to a project.
+// Uses a 3-step presigned URL flow:
+//  1. Get a presigned S3 upload URL from the API
+//  2. Upload the archive directly to S3
+//  3. Trigger the deploy pipeline
 func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []byte, title, description string) (*StaticDeployResponse, error) {
-	path := fmt.Sprintf("/api/project/%s/deploy-static", projectID)
+	// Step 1: Get presigned upload URL
+	uploadURLPath := fmt.Sprintf("/api/project/%s/deploy-static/upload-url", projectID)
+	uploadReqBody := map[string]string{}
+	if title != "" {
+		uploadReqBody["title"] = title
+	}
+	if description != "" {
+		uploadReqBody["description"] = description
+	}
 
-	token, err := c.AuthManager.GetToken()
+	respBody, err := c.Do(ctx, "POST", uploadURLPath, uploadReqBody)
 	if err != nil {
-		return nil, fmt.Errorf("auth failed: %w", err)
+		return nil, fmt.Errorf("failed to get upload URL: %w", err)
 	}
 
-	body, statusCode, err := c.doRawBinary(ctx, "POST", path, archive, token, title, description)
+	var uploadURLResp uploadURLEnvelope
+	if err := json.Unmarshal(respBody, &uploadURLResp); err != nil {
+		return nil, fmt.Errorf("failed to parse upload URL response: %w", err)
+	}
+	if uploadURLResp.Data.UploadURL == "" {
+		return nil, fmt.Errorf("server returned empty upload URL")
+	}
+
+	// Step 2: Upload directly to S3 via presigned URL
+	s3Req, err := http.NewRequestWithContext(ctx, "PUT", uploadURLResp.Data.UploadURL, bytes.NewReader(archive))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create S3 upload request: %w", err)
+	}
+	s3Req.Header.Set("Content-Type", "application/gzip")
+
+	s3Resp, err := c.HTTPClient.Do(s3Req)
+	if err != nil {
+		return nil, fmt.Errorf("S3 upload failed: %w", err)
+	}
+	defer s3Resp.Body.Close()
+
+	if s3Resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("S3 upload failed (HTTP %d)", s3Resp.StatusCode)
 	}
 
-	// Auto-retry on 401
-	if statusCode == 401 {
-		c.AuthManager.InvalidateToken()
-		token, err = c.AuthManager.GetToken()
-		if err != nil {
-			return nil, fmt.Errorf("auth failed: %w", err)
-		}
-		body, statusCode, err = c.doRawBinary(ctx, "POST", path, archive, token, title, description)
-		if err != nil {
-			return nil, err
-		}
-	}
+	// Step 3: Trigger the deploy
+	triggerPath := fmt.Sprintf("/api/project/%s/deploy-static/trigger", projectID)
+	triggerBody := map[string]string{"taskId": uploadURLResp.Data.TaskID}
 
-	if statusCode >= 400 {
-		return nil, parseAPIError(body, statusCode)
+	triggerRespBody, err := c.Do(ctx, "POST", triggerPath, triggerBody)
+	if err != nil {
+		return nil, fmt.Errorf("deploy trigger failed: %w", err)
 	}
 
 	var envelope staticDeployEnvelope
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
 	}
 	return &envelope.Data, nil
 }
