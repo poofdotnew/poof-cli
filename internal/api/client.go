@@ -169,6 +169,42 @@ func (c *Client) doWithTokenBody(ctx context.Context, method, path string, build
 	return respBody, nil
 }
 
+// doRawBinary sends a raw binary body (e.g. gzip) instead of JSON.
+func (c *Client) doRawBinary(ctx context.Context, method, path string, body []byte, token, title, description string) ([]byte, int, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-Wallet-Address", c.AuthManager.WalletAddress())
+	req.Header.Set("Content-Type", "application/gzip")
+	if title != "" {
+		req.Header.Set("X-Deploy-Title", title)
+	}
+	if description != "" {
+		req.Header.Set("X-Deploy-Description", description)
+	}
+
+	if c.BypassToken != "" {
+		req.Header.Set("x-vercel-protection-bypass", c.BypassToken)
+		req.AddCookie(&http.Cookie{Name: "_vercel_jwt", Value: c.BypassToken})
+	}
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return nil, 0, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return respBody, resp.StatusCode, nil
+}
+
 func parseAPIError(body []byte, statusCode int) error {
 	var apiErr APIError
 	if err := json.Unmarshal(body, &apiErr); err != nil {

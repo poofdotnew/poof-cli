@@ -95,6 +95,60 @@ type DownloadURLResponse struct {
 
 func (r *DownloadURLResponse) QuietString() string { return r.URL }
 
+// StaticDeployResponse is the response from deploy-static.
+type StaticDeployResponse struct {
+	ProjectID string `json:"projectId"`
+	TaskID    string `json:"taskId"`
+	BundleURL string `json:"bundleUrl"`
+	Slug      string `json:"slug"`
+}
+
+func (r *StaticDeployResponse) QuietString() string { return r.BundleURL }
+
+type staticDeployEnvelope struct {
+	Success bool                `json:"success"`
+	Data    StaticDeployResponse `json:"data"`
+	Error   string              `json:"error,omitempty"`
+}
+
+// DeployStatic uploads a pre-built static frontend (tar.gz) to a project.
+func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []byte, title, description string) (*StaticDeployResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/deploy-static", projectID)
+
+	token, err := c.AuthManager.GetToken()
+	if err != nil {
+		return nil, fmt.Errorf("auth failed: %w", err)
+	}
+
+	body, statusCode, err := c.doRawBinary(ctx, "POST", path, archive, token, title, description)
+	if err != nil {
+		return nil, err
+	}
+
+	// Auto-retry on 401
+	if statusCode == 401 {
+		c.AuthManager.InvalidateToken()
+		token, err = c.AuthManager.GetToken()
+		if err != nil {
+			return nil, fmt.Errorf("auth failed: %w", err)
+		}
+		body, statusCode, err = c.doRawBinary(ctx, "POST", path, archive, token, title, description)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if statusCode >= 400 {
+		return nil, parseAPIError(body, statusCode)
+	}
+
+	var envelope staticDeployEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &envelope.Data, nil
+}
+
 func (c *Client) CheckPublishEligibility(ctx context.Context, projectID string) (*PublishEligibility, error) {
 	path := fmt.Sprintf("/api/project/%s/check-publish-eligibility", projectID)
 	body, err := c.Do(ctx, "GET", path, nil)
