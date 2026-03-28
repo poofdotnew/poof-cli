@@ -78,6 +78,10 @@ var projectCreateCmd = &cobra.Command{
 			return fmt.Errorf("--message is required\n  poof project create -m \"Build a todo app\"")
 		}
 
+		if err := validateMode(mode); err != nil {
+			return err
+		}
+
 		req := api.CreateProjectRequest{
 			FirstMessage:   message,
 			IsPublic:       isPublic,

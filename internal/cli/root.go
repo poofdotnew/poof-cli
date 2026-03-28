@@ -128,6 +128,24 @@ func getProjectID() (string, error) {
 	return id, nil
 }
 
+// validModes lists all supported generation modes for project creation.
+var validModes = map[string]bool{
+	"full":           true,
+	"policy":         true,
+	"ui,policy":      true,
+	"backend,policy": true,
+	"ui":             true,
+	"backend":        true,
+}
+
+// validateMode checks if a generation mode is valid.
+func validateMode(mode string) error {
+	if !validModes[mode] {
+		return fmt.Errorf("invalid mode %q (valid: full, policy, ui,policy, backend,policy)", mode)
+	}
+	return nil
+}
+
 // handleError formats an API error with context-aware messaging and returns it.
 func handleError(err error) error {
 	apiErr, ok := api.IsAPIError(err)

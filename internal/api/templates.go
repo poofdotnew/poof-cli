@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 type Template struct {
@@ -25,6 +26,14 @@ type TemplatePagination struct {
 type TemplatesResponse struct {
 	Templates  []Template         `json:"templates"`
 	Pagination TemplatePagination `json:"pagination"`
+}
+
+func (r *TemplatesResponse) QuietString() string {
+	var ids []string
+	for _, t := range r.Templates {
+		ids = append(ids, t.ID)
+	}
+	return strings.Join(ids, "\n")
 }
 
 func (c *Client) ListTemplates(ctx context.Context, category, search, sortBy string, limit, skip int) (*TemplatesResponse, error) {

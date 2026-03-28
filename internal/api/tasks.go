@@ -5,10 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 type TasksResponse struct {
 	Tasks []map[string]interface{} `json:"tasks"`
+}
+
+func (r *TasksResponse) QuietString() string {
+	var ids []string
+	for _, t := range r.Tasks {
+		if id, ok := t["id"].(string); ok {
+			ids = append(ids, id)
+		}
+	}
+	return strings.Join(ids, "\n")
 }
 
 type TaskResponse struct {

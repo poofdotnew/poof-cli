@@ -37,6 +37,10 @@ var buildCmd = &cobra.Command{
 		isPublic, _ := cmd.Flags().GetBool("public")
 		mode, _ := cmd.Flags().GetString("mode")
 
+		if err := validateMode(mode); err != nil {
+			return err
+		}
+
 		ctx := context.Background()
 
 		// 1. Create project
