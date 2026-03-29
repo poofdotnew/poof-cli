@@ -14,8 +14,9 @@ type Manager struct {
 	wallet        string
 	env           string
 
-	mu      sync.Mutex
-	session *Session
+	mu               sync.Mutex
+	session          *Session
+	cacheInvalidated bool // set on 401 to skip reloading the same bad token from disk
 }
 
 // NewManager creates a new auth manager.
@@ -49,9 +50,9 @@ func (m *Manager) GetToken() (string, error) {
 		return m.session.IDToken, nil
 	}
 
-	// 2. Check on-disk cache
+	// 2. Check on-disk cache (skip if invalidated by a 401 retry)
 	cached, err := LoadCachedTokens()
-	if err == nil && cached.IsValid(m.wallet, m.env) {
+	if err == nil && !m.cacheInvalidated && cached.IsValid(m.wallet, m.env) {
 		m.session = &Session{
 			IDToken:      cached.IDToken,
 			AccessToken:  cached.AccessToken,
@@ -102,11 +103,14 @@ func (m *Manager) login() (string, error) {
 	return session.IDToken, nil
 }
 
-// InvalidateToken clears the cached token so the next call re-authenticates.
+// InvalidateToken clears the in-memory session and marks the cache as
+// invalidated so the next GetToken call will refresh or re-authenticate
+// instead of reloading the same rejected token from disk.
 func (m *Manager) InvalidateToken() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.session = nil
+	m.cacheInvalidated = true
 }
 
 // WalletAddress returns the wallet address derived from the keypair.
