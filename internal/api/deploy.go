@@ -442,7 +442,10 @@ func (c *Client) signPermitTransaction(unsignedBase64 string) (string, error) {
 		return "", fmt.Errorf("invalid private key length: %d", len(secretBytes))
 	}
 	privKey := ed25519.NewKeyFromSeed(secretBytes[:32])
-	pubKey := privKey.Public().(ed25519.PublicKey)
+	pubKey, ok := privKey.Public().(ed25519.PublicKey)
+	if !ok {
+		return "", fmt.Errorf("unexpected public key type")
+	}
 	walletPubkey := solana.PublicKeyFromBytes(pubKey)
 
 	// Ensure signature slots exist
