@@ -135,7 +135,7 @@ Sends a chat message, waits for the AI to finish, and shows test results if any 
 #### `poof ship` — Scan, check, and deploy
 
 ```bash
-poof ship -p <id> --signed-permit <tx>            # deploy to preview (default)
+poof ship -p <id>                                 # deploy to preview (default)
 poof ship -p <id> -t production --yes             # deploy to production
 poof ship -p <id> -t mobile --platform ios --app-name "My App" --app-icon-url https://...
 poof ship -p <id> --dry-run                       # scan + check without deploying
@@ -175,7 +175,7 @@ poof files update -p <id> --from-json files.json          # bulk update from JSO
 
 ```bash
 poof deploy check -p <id>                          # check publish eligibility
-poof deploy preview -p <id> --signed-permit <tx>   # deploy to mainnet preview
+poof deploy preview -p <id>                        # deploy to mainnet preview
 poof deploy production -p <id> --yes               # deploy to production
 poof deploy mobile -p <id> --platform ios --app-name "My App" --app-icon-url https://...
 poof deploy static -p <id> --archive dist.tar.gz   # deploy pre-built static frontend

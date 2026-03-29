@@ -24,8 +24,10 @@ type AuthProvider interface {
 // Client is the Poof REST API client.
 type Client struct {
 	BaseURL     string
+	DevAPIURL   string // Tarobase developer API for deploy permits
 	AuthManager AuthProvider
 	BypassToken string
+	PrivateKey  string // base58-encoded wallet private key (for signing permits)
 	HTTPClient  *http.Client
 }
 
@@ -38,8 +40,10 @@ func NewClient(cfg *config.Config, authMgr *auth.Manager) (*Client, error) {
 
 	return &Client{
 		BaseURL:     env.BaseURL,
+		DevAPIURL:   env.DevAPIURL,
 		AuthManager: authMgr,
 		BypassToken: cfg.BypassToken,
+		PrivateKey:  cfg.SolanaPrivateKey,
 		HTTPClient:  &http.Client{},
 	}, nil
 }

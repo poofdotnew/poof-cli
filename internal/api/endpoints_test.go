@@ -261,8 +261,17 @@ func TestCheckPublishEligibility_Success(t *testing.T) {
 
 func TestPublishProject_Production(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("expected POST, got %s", r.Method)
+		// PublishProject now calls GetProjectStatus (GET) first to auto-sign permits,
+		// then the actual deploy (POST). Handle both.
+		if r.Method == http.MethodGet {
+			// Return project status with no connection info (no permit needed)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"project": map[string]interface{}{"id": "proj-1"},
+					"urls":    map[string]string{},
+				},
+			})
+			return
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{}`))
@@ -278,13 +287,23 @@ func TestPublishProject_Production(t *testing.T) {
 
 func TestPublishProject_Preview(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Handle GET for project status + POST for deploy
+		if r.Method == http.MethodGet {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"data": map[string]interface{}{
+					"project": map[string]interface{}{"id": "proj-1"},
+					"urls":    map[string]string{},
+				},
+			})
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.PublishProject(context.Background(), "proj-1", "preview", "signed-tx-data")
+	err := client.PublishProject(context.Background(), "proj-1", "preview")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

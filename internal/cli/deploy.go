@@ -58,8 +58,8 @@ var deployCheckCmd = &cobra.Command{
 var deployPreviewCmd = &cobra.Command{
 	Use:   "preview",
 	Short: "Deploy to mainnet preview",
-	Example: `  poof deploy preview -p <id> --signed-permit <tx>
-  poof deploy preview -p <id> --signed-permit <tx> --dry-run`,
+	Example: `  poof deploy preview -p <id>
+  poof deploy preview -p <id> --dry-run`,
 	RunE: deployTarget("preview"),
 }
 
@@ -138,39 +138,11 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				return handleError(err)
 			}
 
-		case "preview":
-			signedPermit, _ := cmd.Flags().GetString("signed-permit")
-			if signedPermit == "" {
-				return fmt.Errorf("--signed-permit is required for preview deploy\n  poof deploy preview -p %s --signed-permit <transaction>", projectID)
-			}
-			opts := &api.PublishOptions{
-				SignedPermitTransaction: signedPermit,
-			}
+		default:
+			// preview and production — permit signing is handled automatically by the API client
+			opts := &api.PublishOptions{}
 			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
 				opts.AllowedAddresses = strings.Split(addrs, ",")
-			}
-			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
-				var parsed map[string]interface{}
-				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
-					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
-				}
-				opts.ConstantsOverrides = parsed
-			}
-			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
-				var parsed map[string]interface{}
-				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
-					return fmt.Errorf("--config must be valid JSON: %w", err)
-				}
-				opts.Config = parsed
-			}
-			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
-				return handleError(err)
-			}
-
-		default:
-			opts := &api.PublishOptions{}
-			if signedPermit, _ := cmd.Flags().GetString("signed-permit"); signedPermit != "" {
-				opts.SignedPermitTransaction = signedPermit
 			}
 			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
 				var parsed map[string]interface{}
@@ -353,7 +325,6 @@ func init() {
 	// Preview flags
 	deployPreviewCmd.Flags().Bool("dry-run", false, "Preview what would happen without deploying")
 	deployPreviewCmd.Flags().Bool("yes", false, "Skip confirmation")
-	deployPreviewCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for preview)")
 	deployPreviewCmd.Flags().String("allowed-addresses", "", "Comma-separated wallet addresses allowed to access preview (max 10)")
 	deployPreviewCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides for preview")
 	deployPreviewCmd.Flags().String("config", "", "JSON object of config overrides for preview (e.g. title, favicon)")
@@ -361,7 +332,6 @@ func init() {
 	// Production flags
 	deployProductionCmd.Flags().Bool("dry-run", false, "Preview what would happen without deploying")
 	deployProductionCmd.Flags().Bool("yes", false, "Skip confirmation (required for production)")
-	deployProductionCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for subsequent deploys)")
 	deployProductionCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides for production")
 	deployProductionCmd.Flags().String("config", "", "JSON object of config overrides for production (e.g. title, favicon)")
 

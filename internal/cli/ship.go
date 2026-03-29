@@ -129,34 +129,6 @@ var shipCmd = &cobra.Command{
 		}
 
 		switch target {
-		case "preview":
-			signedPermit, _ := cmd.Flags().GetString("signed-permit")
-			if signedPermit == "" {
-				return fmt.Errorf("--signed-permit is required for preview deploy\n  poof ship -p %s -t preview --signed-permit <transaction>", projectID)
-			}
-			opts := &api.PublishOptions{
-				SignedPermitTransaction: signedPermit,
-			}
-			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
-				opts.AllowedAddresses = strings.Split(addrs, ",")
-			}
-			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
-				var parsed map[string]interface{}
-				if err := json.Unmarshal([]byte(overrides), &parsed); err != nil {
-					return fmt.Errorf("--constants-overrides must be valid JSON: %w", err)
-				}
-				opts.ConstantsOverrides = parsed
-			}
-			if cfg, _ := cmd.Flags().GetString("config"); cfg != "" {
-				var parsed map[string]interface{}
-				if err := json.Unmarshal([]byte(cfg), &parsed); err != nil {
-					return fmt.Errorf("--config must be valid JSON: %w", err)
-				}
-				opts.Config = parsed
-			}
-			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
-				return handleError(err)
-			}
 		case "mobile":
 			platform, _ := cmd.Flags().GetString("platform")
 			appName, _ := cmd.Flags().GetString("app-name")
@@ -181,9 +153,10 @@ var shipCmd = &cobra.Command{
 				return handleError(err)
 			}
 		default:
+			// preview and production — permit signing is handled automatically
 			opts := &api.PublishOptions{}
-			if signedPermit, _ := cmd.Flags().GetString("signed-permit"); signedPermit != "" {
-				opts.SignedPermitTransaction = signedPermit
+			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
+				opts.AllowedAddresses = strings.Split(addrs, ",")
 			}
 			if overrides, _ := cmd.Flags().GetString("constants-overrides"); overrides != "" {
 				var parsed map[string]interface{}
@@ -232,7 +205,6 @@ func init() {
 	shipCmd.Flags().StringP("target", "t", "preview", "Deploy target: preview, production, mobile")
 	shipCmd.Flags().Bool("dry-run", false, "Run scan and check eligibility, but don't deploy")
 	shipCmd.Flags().Bool("yes", false, "Skip confirmation (required for production)")
-	shipCmd.Flags().String("signed-permit", "", "Signed permit transaction (required for preview)")
 	shipCmd.Flags().String("allowed-addresses", "", "Comma-separated wallet addresses allowed to access preview (max 10)")
 	shipCmd.Flags().String("constants-overrides", "", "JSON object of constants overrides")
 	shipCmd.Flags().String("config", "", "JSON object of config overrides (e.g. title, favicon)")

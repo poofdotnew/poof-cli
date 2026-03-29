@@ -3,10 +3,15 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/gagliardetto/solana-go"
+	"github.com/mr-tron/base58"
 )
 
 // PublishEligibility matches the server's nested response shape.
@@ -44,10 +49,9 @@ type PreviewPublishRequest struct {
 
 // PublishOptions holds optional parameters for preview/production deploys.
 type PublishOptions struct {
-	SignedPermitTransaction string
-	AllowedAddresses        []string
-	ConstantsOverrides      map[string]interface{}
-	Config                  map[string]interface{}
+	AllowedAddresses   []string
+	ConstantsOverrides map[string]interface{}
+	Config             map[string]interface{}
 }
 
 type MobilePublishRequest struct {
@@ -237,20 +241,21 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 		return err
 	}
 
-	// Extract opts: first arg can be a string (signedPermit) or *PublishOptions.
 	var publishOpts PublishOptions
 	if len(opts) > 0 {
-		switch v := opts[0].(type) {
-		case string:
-			publishOpts.SignedPermitTransaction = v
-		case *PublishOptions:
-			if v != nil {
-				publishOpts = *v
-			}
+		if v, ok := opts[0].(*PublishOptions); ok && v != nil {
+			publishOpts = *v
 		}
 	}
 
-	_, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+	// Auto-generate signed permit for preview/production deploys.
+	// Get the appropriate Tarobase app ID from project status.
+	signedPermit, err := c.getSignedPermitForDeploy(ctx, projectID, target)
+	if err != nil {
+		return fmt.Errorf("failed to generate deploy permit: %w", err)
+	}
+
+	_, err = c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
 		token, err := c.AuthManager.GetToken()
 		if err != nil {
 			return nil, err
@@ -258,7 +263,7 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 		if target == "preview" {
 			return PreviewPublishRequest{
 				AuthToken:                        token,
-				SignedPermitTransaction:          publishOpts.SignedPermitTransaction,
+				SignedPermitTransaction:          signedPermit,
 				AllowedAddresses:                 publishOpts.AllowedAddresses,
 				MainnetPreviewConstantsOverrides: publishOpts.ConstantsOverrides,
 				MainnetPreviewConfig:             publishOpts.Config,
@@ -267,7 +272,7 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 		// production
 		return PublishRequest{
 			AuthToken:               token,
-			SignedPermitTransaction: publishOpts.SignedPermitTransaction,
+			SignedPermitTransaction: signedPermit,
 			ProdConstantsOverrides:  publishOpts.ConstantsOverrides,
 			ProdConfig:              publishOpts.Config,
 		}, nil
@@ -309,4 +314,168 @@ func (c *Client) GetDownloadURL(ctx context.Context, projectID, taskID string) (
 		ExpiresAt: envelope.Data.ExpiresAt,
 		FileName:  envelope.Data.FileName,
 	}, nil
+}
+
+// getSignedPermitForDeploy fetches an unsigned permit transaction from the
+// Tarobase developer API and signs it with the wallet's private key.
+func (c *Client) getSignedPermitForDeploy(ctx context.Context, projectID, target string) (string, error) {
+	// Get the Tarobase app ID for this target
+	status, err := c.GetProjectStatus(ctx, projectID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get project status: %w", err)
+	}
+
+	var appID string
+	if status.ConnectionInfo != nil {
+		switch target {
+		case "preview":
+			if status.ConnectionInfo.Preview != nil {
+				appID = status.ConnectionInfo.Preview.TarobaseAppId
+			}
+		case "production":
+			if status.ConnectionInfo.Production != nil {
+				appID = status.ConnectionInfo.Production.TarobaseAppId
+			}
+		}
+	}
+	if appID == "" {
+		// No app ID means first deploy — permit not needed
+		return "", nil
+	}
+
+	// Get auth token for Tarobase API call
+	token, err := c.AuthManager.GetToken()
+	if err != nil {
+		return "", fmt.Errorf("failed to get auth token: %w", err)
+	}
+
+	// Call Tarobase developer API to get unsigned permit
+	unsignedPermit, err := c.fetchUnsignedPermit(ctx, appID, token)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch permit: %w", err)
+	}
+
+	// Sign the permit transaction with the wallet's private key
+	signedPermit, err := c.signPermitTransaction(unsignedPermit)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign permit: %w", err)
+	}
+
+	return signedPermit, nil
+}
+
+// fetchUnsignedPermit calls the Tarobase developer API to get an unsigned
+// update authority permit transaction for the given app.
+func (c *Client) fetchUnsignedPermit(ctx context.Context, appID, authToken string) (string, error) {
+	if c.DevAPIURL == "" {
+		return "", fmt.Errorf("Tarobase developer API URL not configured")
+	}
+
+	reqBody, err := json.Marshal(map[string]string{
+		"action": "createUpdateAppAuthorityPermit",
+		"appId":  appID,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.DevAPIURL, bytes.NewReader(reqBody))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+authToken)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("Tarobase API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	// Response is a JSON string (base64-encoded transaction)
+	var unsignedTx string
+	if err := json.Unmarshal(body, &unsignedTx); err != nil {
+		return "", fmt.Errorf("failed to parse permit response: %w", err)
+	}
+
+	return unsignedTx, nil
+}
+
+// signPermitTransaction deserializes a base64-encoded Solana transaction,
+// signs it with the wallet's private key, and returns the signed transaction
+// as a base64-encoded string.
+func (c *Client) signPermitTransaction(unsignedBase64 string) (string, error) {
+	if c.PrivateKey == "" {
+		return "", fmt.Errorf("wallet private key not configured")
+	}
+
+	// Decode the unsigned transaction
+	txBytes, err := base64.StdEncoding.DecodeString(unsignedBase64)
+	if err != nil {
+		return "", fmt.Errorf("invalid base64 transaction: %w", err)
+	}
+
+	tx, err := solana.TransactionFromBytes(txBytes)
+	if err != nil {
+		return "", fmt.Errorf("invalid Solana transaction: %w", err)
+	}
+
+	// Load wallet keypair
+	secretBytes, err := base58.Decode(c.PrivateKey)
+	if err != nil {
+		return "", fmt.Errorf("invalid private key: %w", err)
+	}
+	if len(secretBytes) != 64 {
+		return "", fmt.Errorf("invalid private key length: %d", len(secretBytes))
+	}
+	privKey := ed25519.NewKeyFromSeed(secretBytes[:32])
+	pubKey := privKey.Public().(ed25519.PublicKey)
+	walletPubkey := solana.PublicKeyFromBytes(pubKey)
+
+	// Ensure signature slots exist
+	numSigners := int(tx.Message.Header.NumRequiredSignatures)
+	if len(tx.Signatures) < numSigners {
+		sigs := make([]solana.Signature, numSigners)
+		copy(sigs, tx.Signatures)
+		tx.Signatures = sigs
+	}
+
+	// Find our wallet in the signers and sign
+	walletIdx := -1
+	for i, key := range tx.Message.AccountKeys {
+		if key.Equals(walletPubkey) {
+			walletIdx = i
+			break
+		}
+	}
+	if walletIdx < 0 {
+		return "", fmt.Errorf("wallet %s not found in transaction signers", walletPubkey)
+	}
+
+	// Sign the transaction message
+	messageBytes, err := tx.Message.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal transaction message: %w", err)
+	}
+	sig := ed25519.Sign(privKey, messageBytes)
+	var solSig solana.Signature
+	copy(solSig[:], sig)
+	tx.Signatures[walletIdx] = solSig
+
+	// Serialize with requireAllSignatures=false (facilitator signs later)
+	signedBytes, err := tx.MarshalBinary()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize signed transaction: %w", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(signedBytes), nil
 }
