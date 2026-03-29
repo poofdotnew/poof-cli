@@ -67,7 +67,8 @@ type MobilePublishRequest struct {
 // Download response types — server wraps in { data: {...} }.
 
 type downloadDataEnvelope struct {
-	Data struct {
+	Success bool `json:"success"`
+	Data    struct {
 		DownloadTaskID string `json:"downloadTaskId"`
 		ProjectID      string `json:"projectId"`
 		Status         string `json:"status"`
@@ -290,6 +291,9 @@ func (c *Client) DownloadCode(ctx context.Context, projectID string) (*DownloadR
 	var envelope downloadDataEnvelope
 	if err := json.Unmarshal(body, &envelope); err != nil {
 		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if !envelope.Success || envelope.Data.Status == "failed" {
+		return nil, fmt.Errorf("download failed to initiate. Try again or check project status")
 	}
 	return &DownloadResponse{
 		TaskID:    envelope.Data.DownloadTaskID,
