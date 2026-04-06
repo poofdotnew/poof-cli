@@ -2,11 +2,65 @@ package cli
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
 )
+
+// Supported image MIME types
+var imageExtToMIME = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+}
+
+const maxImageSizeMB = 3.4
+
+// uploadAndPrepareFiles uploads image files and returns the message suffix and CDN URLs.
+func uploadAndPrepareFiles(ctx context.Context, projectID string, filePaths []string) (string, []string, error) {
+	var messageAppend string
+	var urls []string
+
+	for _, fp := range filePaths {
+		ext := strings.ToLower(filepath.Ext(fp))
+		contentType, ok := imageExtToMIME[ext]
+		if !ok {
+			return "", nil, fmt.Errorf("unsupported image type %q (supported: .png, .jpg, .jpeg, .gif, .webp)", ext)
+		}
+
+		data, err := os.ReadFile(fp)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to read %s: %w", fp, err)
+		}
+
+		sizeLimitMB := maxImageSizeMB
+		maxBytes := int(sizeLimitMB * 1024 * 1024)
+		if len(data) > maxBytes {
+			return "", nil, fmt.Errorf("%s exceeds %.1fMB limit (%d bytes)", fp, maxImageSizeMB, len(data))
+		}
+
+		encoded := base64.StdEncoding.EncodeToString(data)
+		fileName := filepath.Base(fp)
+
+		output.Info("Uploading %s...", fileName)
+		resp, err := apiClient.UploadImage(ctx, projectID, encoded, contentType, fileName)
+		if err != nil {
+			return "", nil, fmt.Errorf("failed to upload %s: %w", fileName, err)
+		}
+
+		urls = append(urls, resp.URL)
+		messageAppend += fmt.Sprintf(` <userUploadedFile type="image">%s</userUploadedFile>`, resp.URL)
+	}
+
+	return messageAppend, urls, nil
+}
 
 var chatCmd = &cobra.Command{
 	Use:   "chat",
@@ -31,15 +85,28 @@ var chatSendCmd = &cobra.Command{
 
 		message, _ := cmd.Flags().GetString("message")
 		useStdin, _ := cmd.Flags().GetBool("stdin")
+		filePaths, _ := cmd.Flags().GetStringSlice("file")
 
 		if useStdin {
 			message = readStdin()
 		}
-		if message == "" {
+		if message == "" && len(filePaths) == 0 {
 			return fmt.Errorf("--message is required\n  poof chat send -p %s -m \"Add a feature\"", projectID)
 		}
 
-		resp, err := apiClient.Chat(context.Background(), projectID, message)
+		ctx := context.Background()
+		var attachedFiles []string
+
+		if len(filePaths) > 0 {
+			suffix, urls, err := uploadAndPrepareFiles(ctx, projectID, filePaths)
+			if err != nil {
+				return err
+			}
+			message += suffix
+			attachedFiles = urls
+		}
+
+		resp, err := apiClient.Chat(ctx, projectID, message, attachedFiles)
 		if err != nil {
 			return handleError(err)
 		}
@@ -147,6 +214,7 @@ var chatSteerCmd = &cobra.Command{
 func init() {
 	chatSendCmd.Flags().StringP("message", "m", "", "Message to send (required)")
 	chatSendCmd.Flags().Bool("stdin", false, "Read message from stdin")
+	chatSendCmd.Flags().StringSlice("file", nil, "Image file(s) to attach (PNG, JPEG, GIF, WebP, max 3.4MB each)")
 	chatSteerCmd.Flags().StringP("message", "m", "", "Steering message (required)")
 	chatSteerCmd.Flags().Bool("stdin", false, "Read message from stdin")
 

@@ -49,6 +49,16 @@ func TestConfig_GetEnvironment(t *testing.T) {
 }
 
 func TestLoad_Defaults(t *testing.T) {
+	// Run from a temp dir so godotenv.Load() doesn't read the repo .env file,
+	// and point HOME to a temp dir so viper doesn't read ~/.poof/config.yaml.
+	origDir, _ := os.Getwd()
+	tmpDir := t.TempDir()
+	if err := os.Chdir(tmpDir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
+	t.Cleanup(func() { os.Chdir(origDir) })
+	t.Setenv("HOME", tmpDir)
+
 	// Clear env vars that would override defaults.
 	t.Setenv("SOLANA_PRIVATE_KEY", "")
 	t.Setenv("SOLANA_WALLET_ADDRESS", "")

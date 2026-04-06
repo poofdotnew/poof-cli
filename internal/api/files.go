@@ -50,3 +50,58 @@ func (c *Client) UpdateFiles(ctx context.Context, projectID string, files map[st
 	})
 	return err
 }
+
+type UploadImageRequest struct {
+	ImageBase64   string `json:"imageBase64"`
+	ContentType   string `json:"contentType"`
+	FileName      string `json:"fileName,omitempty"`
+	TarobaseToken string `json:"tarobaseToken"`
+}
+
+type uploadImageEnvelope struct {
+	Success bool `json:"success"`
+	Data    struct {
+		URL     string `json:"url"`
+		FileKey string `json:"fileKey"`
+	} `json:"data"`
+	Error string `json:"error,omitempty"`
+}
+
+type UploadImageResponse struct {
+	URL     string `json:"url"`
+	FileKey string `json:"fileKey"`
+}
+
+func (r *UploadImageResponse) QuietString() string { return r.URL }
+
+func (c *Client) UploadImage(ctx context.Context, projectID, imageBase64, contentType, fileName string) (*UploadImageResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/files/upload-image", projectID)
+
+	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return UploadImageRequest{
+			ImageBase64:   imageBase64,
+			ContentType:   contentType,
+			FileName:      fileName,
+			TarobaseToken: token,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var envelope uploadImageEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if !envelope.Success {
+		return nil, fmt.Errorf("upload failed: %s", envelope.Error)
+	}
+	return &UploadImageResponse{
+		URL:     envelope.Data.URL,
+		FileKey: envelope.Data.FileKey,
+	}, nil
+}

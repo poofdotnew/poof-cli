@@ -30,18 +30,29 @@ var iterateCmd = &cobra.Command{
 
 		message, _ := cmd.Flags().GetString("message")
 		useStdin, _ := cmd.Flags().GetBool("stdin")
+		filePaths, _ := cmd.Flags().GetStringSlice("file")
 
 		if useStdin {
 			message = readStdin()
 		}
-		if message == "" {
+		if message == "" && len(filePaths) == 0 {
 			return fmt.Errorf("--message is required\n  poof iterate -p %s -m \"Add a feature\"", projectID)
 		}
 
 		ctx := context.Background()
 
+		var attachedFiles []string
+		if len(filePaths) > 0 {
+			suffix, urls, err := uploadAndPrepareFiles(ctx, projectID, filePaths)
+			if err != nil {
+				return err
+			}
+			message += suffix
+			attachedFiles = urls
+		}
+
 		// 1. Send chat message
-		_, err = apiClient.Chat(ctx, projectID, message)
+		_, err = apiClient.Chat(ctx, projectID, message, attachedFiles)
 		if err != nil {
 			return handleError(err)
 		}
@@ -97,4 +108,5 @@ var iterateCmd = &cobra.Command{
 func init() {
 	iterateCmd.Flags().StringP("message", "m", "", "Message to send (required)")
 	iterateCmd.Flags().Bool("stdin", false, "Read message from stdin")
+	iterateCmd.Flags().StringSlice("file", nil, "Image file(s) to attach (PNG, JPEG, GIF, WebP, max 3.4MB each)")
 }

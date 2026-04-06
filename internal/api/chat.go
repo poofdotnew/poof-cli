@@ -9,9 +9,10 @@ import (
 )
 
 type ChatRequest struct {
-	Message       string `json:"message"`
-	MessageID     string `json:"messageId"`
-	TarobaseToken string `json:"tarobaseToken"`
+	Message       string   `json:"message"`
+	MessageID     string   `json:"messageId"`
+	TarobaseToken string   `json:"tarobaseToken"`
+	AttachedFiles []string `json:"attachedFiles,omitempty"`
 }
 
 type ChatResponse struct {
@@ -38,7 +39,7 @@ type SteerRequest struct {
 	MessageID string `json:"messageId,omitempty"`
 }
 
-func (c *Client) Chat(ctx context.Context, projectID, message string) (*ChatResponse, error) {
+func (c *Client) Chat(ctx context.Context, projectID, message string, attachedFiles []string) (*ChatResponse, error) {
 	path := fmt.Sprintf("/api/project/%s/chat", projectID)
 
 	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
@@ -50,6 +51,7 @@ func (c *Client) Chat(ctx context.Context, projectID, message string) (*ChatResp
 			Message:       message,
 			MessageID:     uuid.New().String(),
 			TarobaseToken: token,
+			AttachedFiles: attachedFiles,
 		}, nil
 	})
 	if err != nil {
