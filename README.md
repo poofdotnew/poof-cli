@@ -132,6 +132,8 @@ poof iterate -p <id> -m "Fix the login button styling"
 
 Sends a chat message, waits for the AI to finish, and shows test results if any exist.
 
+If `poof task test-results -p <id> --json` comes back with `summary.total = 0`, inspect `poof task list -p <id> --json`, `poof chat active -p <id> --json`, and `poof logs -p <id>` before assuming the run is healthy. When `chat active` stays `true` but there are no new task ids or recent logs, clear the stale state with `poof chat cancel -p <id>` and do one targeted retry instead of stacking generic `iterate` calls.
+
 #### `poof ship` — Scan, check, and deploy
 
 ```bash
