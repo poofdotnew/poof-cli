@@ -77,17 +77,17 @@ The CLI reads configuration from (highest priority first):
 
 ### Required Environment Variables
 
-| Variable | Description |
-|---|---|
-| `SOLANA_PRIVATE_KEY` | Base58-encoded Solana private key |
-| `SOLANA_WALLET_ADDRESS` | Solana wallet public address |
+| Variable                | Description                       |
+| ----------------------- | --------------------------------- |
+| `SOLANA_PRIVATE_KEY`    | Base58-encoded Solana private key |
+| `SOLANA_WALLET_ADDRESS` | Solana wallet public address      |
 
 ### Optional Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `POOF_ENV` | `production` | Environment: `production`, `staging`, or `local` |
-| `VERCEL_BYPASS_TOKEN` | | Vercel protection bypass for staging |
+| Variable              | Default      | Description                                      |
+| --------------------- | ------------ | ------------------------------------------------ |
+| `POOF_ENV`            | `production` | Environment: `production`, `staging`, or `local` |
+| `VERCEL_BYPASS_TOKEN` |              | Vercel protection bypass for staging             |
 
 ### Persistent Config
 
@@ -116,12 +116,12 @@ Creates a project, waits for the AI to finish building, and prints the draft URL
 
 **Flags:**
 
-| Flag | Default | Description |
-|---|---|---|
-| `-m, --message` | (required) | What to build |
-| `--mode` | `full` | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy` |
-| `--public` | `true` | Make project publicly visible |
-| `--stdin` | `false` | Read message from stdin |
+| Flag            | Default    | Description                                                      |
+| --------------- | ---------- | ---------------------------------------------------------------- |
+| `-m, --message` | (required) | What to build                                                    |
+| `--mode`        | `full`     | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy` |
+| `--public`      | `true`     | Make project publicly visible                                    |
+| `--stdin`       | `false`    | Read message from stdin                                          |
 
 #### `poof iterate` — Chat and check results
 
@@ -186,7 +186,8 @@ poof deploy download-url -p <id> --task <taskId>   # get download link
 ### Tasks and Testing
 
 ```bash
-poof task list -p <id>                 # list builds, deployments, downloads
+poof task list -p <id>                 # list the newest 20 project tasks
+poof task list -p <id> --change-id latest  # inspect only the latest change
 poof task get <taskId> -p <id>         # get task details
 poof task test-results -p <id>         # view structured test results
 ```
@@ -280,12 +281,12 @@ poof completion powershell # generate PowerShell completion script
 
 These flags work with every command:
 
-| Flag | Description |
-|---|---|
+| Flag                 | Description                                        |
+| -------------------- | -------------------------------------------------- |
 | `-p, --project <id>` | Project ID (or set `default_project_id` in config) |
-| `--env <name>` | Environment: `production`, `staging`, `local` |
-| `--json` | Output as JSON (for scripting) |
-| `--quiet` | Minimal output (IDs and URLs only) |
+| `--env <name>`       | Environment: `production`, `staging`, `local`      |
+| `--json`             | Output as JSON (for scripting)                     |
+| `--quiet`            | Minimal output (IDs and URLs only)                 |
 
 ## Output Formats
 
@@ -303,11 +304,11 @@ poof project list --quiet
 
 ## Environments
 
-| Environment | Base URL | Use case |
-|---|---|---|
-| `production` | `https://poof.new` | Live apps (default) |
-| `staging` | `https://v2-staging.poof.new` | Testing |
-| `local` | `http://localhost:3000` | Local development |
+| Environment  | Base URL                      | Use case            |
+| ------------ | ----------------------------- | ------------------- |
+| `production` | `https://poof.new`            | Live apps (default) |
+| `staging`    | `https://v2-staging.poof.new` | Testing             |
+| `local`      | `http://localhost:3000`       | Local development   |
 
 Switch environments:
 
@@ -321,12 +322,12 @@ poof config set environment staging
 
 Control what Poof generates when creating a project:
 
-| Mode | What's generated | Use case |
-|---|---|---|
-| `full` | UI + backend + policies + deployment | Turnkey Poof-hosted app |
-| `policy` | Database policies + typed SDK only | You build your own frontend and backend |
-| `ui,policy` | Frontend + policies | You build your own backend |
-| `backend,policy` | Backend API + policies | You build your own frontend |
+| Mode             | What's generated                     | Use case                                |
+| ---------------- | ------------------------------------ | --------------------------------------- |
+| `full`           | UI + backend + policies + deployment | Turnkey Poof-hosted app                 |
+| `policy`         | Database policies + typed SDK only   | You build your own frontend and backend |
+| `ui,policy`      | Frontend + policies                  | You build your own backend              |
+| `backend,policy` | Backend API + policies               | You build your own frontend             |
 
 ```bash
 poof build -m "Token trading platform" --mode full

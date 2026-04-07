@@ -16,6 +16,7 @@ var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks (builds, deployments, downloads)",
 	Example: `  poof task list -p <id>
+  poof task list -p <id> --limit 20
   poof task list -p <id> --change-id <changeId>
   poof task list -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -29,11 +30,10 @@ var taskListCmd = &cobra.Command{
 		}
 
 		changeID, _ := cmd.Flags().GetString("change-id")
-		if changeID == "" {
-			changeID = "latest"
-		}
+		limit, _ := cmd.Flags().GetInt("limit")
+		offset, _ := cmd.Flags().GetInt("offset")
 
-		resp, err := apiClient.ListTasks(context.Background(), projectID, changeID)
+		resp, err := apiClient.ListTasks(context.Background(), projectID, changeID, limit, offset)
 		if err != nil {
 			return handleError(err)
 		}
@@ -51,6 +51,9 @@ var taskListCmd = &cobra.Command{
 				rows[i] = []string{id, status, title}
 			}
 			output.Table([]string{"ID", "Status", "Title"}, rows)
+			if resp.HasMore {
+				output.Info("(more tasks available — use --offset %d to see next page)", offset+len(resp.Tasks))
+			}
 		})
 		return nil
 	},
@@ -115,7 +118,11 @@ var taskTestResultsCmd = &cobra.Command{
 				output.Info("")
 				for _, r := range resp.Results {
 					if r.Status == "failed" || r.Status == "error" {
-						output.Error("  %s: %s", r.FileName, r.LastError)
+						if r.Source != "" {
+							output.Error("  [%s] %s: %s", r.Source, r.FileName, r.LastError)
+						} else {
+							output.Error("  %s: %s", r.FileName, r.LastError)
+						}
 					}
 				}
 			}
@@ -128,7 +135,9 @@ var taskTestResultsCmd = &cobra.Command{
 }
 
 func init() {
-	taskListCmd.Flags().String("change-id", "", "Change ID (default: latest)")
+	taskListCmd.Flags().String("change-id", "", `Change ID filter (omit for project-wide tasks, use "latest" for the latest change only)`)
+	taskListCmd.Flags().Int("limit", 20, "Max tasks to return (1-100)")
+	taskListCmd.Flags().Int("offset", 0, "Offset for pagination")
 
 	taskTestResultsCmd.Flags().Int("limit", 100, "Max test results to return (1-100)")
 	taskTestResultsCmd.Flags().Int("offset", 0, "Offset for pagination")

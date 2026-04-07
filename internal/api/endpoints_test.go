@@ -685,21 +685,55 @@ func TestSecurityScan_Success(t *testing.T) {
 
 func TestListTasks_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("changeId"); got != "change-1" {
+			t.Errorf("expected changeId=change-1, got %q", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "20" {
+			t.Errorf("expected limit=20, got %q", got)
+		}
+		if got := r.URL.Query().Get("offset"); got != "5" {
+			t.Errorf("expected offset=5, got %q", got)
+		}
 		json.NewEncoder(w).Encode(TasksResponse{
 			Tasks: []map[string]interface{}{
 				{"id": "t1", "status": "complete"},
 			},
+			HasMore: true,
 		})
 	}))
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.ListTasks(context.Background(), "proj-1", "change-1")
+	resp, err := client.ListTasks(context.Background(), "proj-1", "change-1", 20, 5)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(resp.Tasks) != 1 {
 		t.Fatalf("expected 1 task, got %d", len(resp.Tasks))
+	}
+	if !resp.HasMore {
+		t.Fatalf("expected HasMore=true")
+	}
+}
+
+func TestListTasks_DefaultProjectWideQuery(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("changeId"); got != "" {
+			t.Errorf("expected no changeId, got %q", got)
+		}
+		if got := r.URL.Query().Get("limit"); got != "20" {
+			t.Errorf("expected limit=20, got %q", got)
+		}
+		if got := r.URL.Query().Get("offset"); got != "" {
+			t.Errorf("expected no offset, got %q", got)
+		}
+		json.NewEncoder(w).Encode(TasksResponse{})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	if _, err := client.ListTasks(context.Background(), "proj-1", "", 20, 0); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -727,7 +761,7 @@ func TestGetTestResults_Success(t *testing.T) {
 		json.NewEncoder(w).Encode(TestResultsResponse{
 			Summary: TestSummary{Total: 5, Passed: 4, Failed: 1},
 			Results: []TestResult{
-				{ID: "r1", TestName: "test_login", Status: "passed"},
+				{ID: "r1", Source: "ui", TestName: "test_login", Status: "passed"},
 			},
 		})
 	}))
@@ -743,6 +777,9 @@ func TestGetTestResults_Success(t *testing.T) {
 	}
 	if resp.Summary.Failed != 1 {
 		t.Errorf("expected Failed=1, got %d", resp.Summary.Failed)
+	}
+	if got := resp.Results[0].Source; got != "ui" {
+		t.Errorf("expected Source=ui, got %q", got)
 	}
 }
 

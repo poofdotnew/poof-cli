@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 )
 
 type TasksResponse struct {
-	Tasks []map[string]interface{} `json:"tasks"`
+	Tasks   []map[string]interface{} `json:"tasks"`
+	HasMore bool                     `json:"hasMore"`
 }
 
 func (r *TasksResponse) QuietString() string {
@@ -46,6 +48,7 @@ func (r *TestResultsResponse) QuietString() string {
 
 type TestResult struct {
 	ID        string          `json:"id"`
+	Source    string          `json:"source"`
 	FileName  string          `json:"fileName"`
 	TestName  string          `json:"testName"`
 	Status    string          `json:"status"`
@@ -88,8 +91,22 @@ type TestSummary struct {
 	Running int `json:"running"`
 }
 
-func (c *Client) ListTasks(ctx context.Context, projectID, changeID string) (*TasksResponse, error) {
-	path := fmt.Sprintf("/api/project/%s/tasks?changeId=%s", projectID, changeID)
+func (c *Client) ListTasks(ctx context.Context, projectID, changeID string, limit, offset int) (*TasksResponse, error) {
+	params := url.Values{}
+	if changeID != "" {
+		params.Set("changeId", changeID)
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	if offset > 0 {
+		params.Set("offset", strconv.Itoa(offset))
+	}
+
+	path := fmt.Sprintf("/api/project/%s/tasks", projectID)
+	if encoded := params.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
 		return nil, err
