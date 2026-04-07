@@ -22,7 +22,7 @@ func TestCheckAIActive_Success(t *testing.T) {
 		if !strings.HasSuffix(r.URL.Path, "/ai/active") {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(AIActiveResponse{Active: true, Status: "running"})
+		json.NewEncoder(w).Encode(AIActiveResponse{Active: true, State: "queued", Status: "ok"})
 	}))
 	defer srv.Close()
 
@@ -34,8 +34,11 @@ func TestCheckAIActive_Success(t *testing.T) {
 	if !resp.Active {
 		t.Error("expected Active=true")
 	}
-	if resp.Status != "running" {
-		t.Errorf("expected Status=running, got %q", resp.Status)
+	if resp.State != "queued" {
+		t.Errorf("expected State=queued, got %q", resp.State)
+	}
+	if resp.Status != "ok" {
+		t.Errorf("expected Status=ok, got %q", resp.Status)
 	}
 }
 

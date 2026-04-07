@@ -24,10 +24,14 @@ func (r *ChatResponse) QuietString() string { return r.MessageID }
 
 type AIActiveResponse struct {
 	Active bool   `json:"active"`
+	State  string `json:"state,omitempty"`
 	Status string `json:"status"`
 }
 
 func (r *AIActiveResponse) QuietString() string {
+	if r.State != "" {
+		return r.State
+	}
 	if r.Active {
 		return "active"
 	}

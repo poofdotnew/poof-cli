@@ -112,7 +112,7 @@ poof build -m "Build a todo app with Solana wallet auth"
 poof build -m "NFT marketplace" --mode policy --public=false
 ```
 
-Creates a project, waits for the AI to finish building, and prints the draft URL. This replaces the typical `create_project` + polling loop + `get_project_status` script.
+Creates a project, waits for the AI to finish building, and prints the project ID plus any currently known URLs. For automation, trust `poof project status -p <id> --json | jq '.publishState.draft.deployed'` as the draft-deployment signal rather than assuming the presence of a draft URL means it is already serving traffic.
 
 **Flags:**
 
@@ -160,7 +160,7 @@ poof project delete -p <id> --yes               # delete (irreversible)
 
 ```bash
 poof chat send -p <id> -m "Add a settings page"   # send a message
-poof chat active -p <id>                           # check if AI is processing
+poof chat active -p <id>                           # check if AI is running, queued, or idle
 poof chat steer -p <id> -m "Focus on backend"      # redirect mid-build
 poof chat cancel -p <id>                           # cancel current build
 ```

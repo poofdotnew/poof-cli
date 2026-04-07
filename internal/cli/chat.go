@@ -140,10 +140,18 @@ var chatActiveCmd = &cobra.Command{
 		}
 
 		output.Print(resp, func() {
+			state := resp.State
+			if state == "" {
+				if resp.Active {
+					state = "running"
+				} else {
+					state = "idle"
+				}
+			}
 			if resp.Active {
-				output.Info("AI is active (status: %s)", resp.Status)
+				output.Info("AI is active (state: %s, status: %s)", state, resp.Status)
 			} else {
-				output.Info("AI is idle (status: %s)", resp.Status)
+				output.Info("AI is idle (state: %s, status: %s)", state, resp.Status)
 			}
 		})
 		return nil
