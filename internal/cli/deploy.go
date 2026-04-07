@@ -179,7 +179,7 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				}
 			})
 		} else {
-			output.Success("Deployed to %s.", target)
+			output.Success("Deployed to %s. (could not fetch updated URLs)", target)
 		}
 		return nil
 	}

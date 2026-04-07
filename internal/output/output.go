@@ -42,6 +42,14 @@ func Success(msg string, args ...interface{}) {
 	color.Green("✓ "+msg, args...)
 }
 
+// Warn prints a warning message in yellow.
+func Warn(msg string, args ...interface{}) {
+	if currentFormat == FormatQuiet {
+		return
+	}
+	color.Yellow("⚠ "+msg, args...)
+}
+
 // Error prints an error message to stderr.
 func Error(msg string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "Error: "+msg+"\n", args...)

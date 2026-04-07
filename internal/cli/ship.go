@@ -94,7 +94,7 @@ var shipCmd = &cobra.Command{
 				return fmt.Errorf("security scan failed: %w", err)
 			}
 			if output.GetFormat() == output.FormatText {
-				output.Success("Security scan completed.")
+				output.Info("Security scan finished. Checking eligibility...")
 			}
 		}
 
@@ -107,10 +107,16 @@ var shipCmd = &cobra.Command{
 			if eligibility.Status == "no_membership" {
 				return fmt.Errorf("not eligible for deployment: a credit purchase is required. Run 'poof credits topup' first")
 			}
+			if strings.Contains(eligibility.Status, "security") {
+				if output.GetFormat() == output.FormatText {
+					output.Warn("Security scan found issues.")
+				}
+				return fmt.Errorf("deployment blocked by security scan: %s", eligibility.Message)
+			}
 			return fmt.Errorf("not eligible for deployment (%s): %s", eligibility.Status, eligibility.Message)
 		}
 		if output.GetFormat() == output.FormatText {
-			output.Success("Eligible for deployment.")
+			output.Success("Security scan passed. Eligible for deployment.")
 		}
 
 		// 3. Deploy
@@ -188,6 +194,7 @@ var shipCmd = &cobra.Command{
 					"projectId": projectID,
 					"urls":      status.URLs,
 				}, func() {
+					output.Success("Deployed to %s.", target)
 					for name, url := range status.URLs {
 						if url != "" {
 							output.Info("  %s: %s", name, url)
@@ -195,6 +202,8 @@ var shipCmd = &cobra.Command{
 					}
 				})
 			}
+		} else {
+			output.Success("Deployed to %s. (could not fetch updated URLs)", target)
 		}
 
 		return nil

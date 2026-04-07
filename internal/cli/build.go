@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
@@ -62,6 +63,13 @@ var buildCmd = &cobra.Command{
 		}
 
 		// 2. Poll until AI finishes
+		// Track whether we've seen the AI become active to avoid declaring
+		// "done" before it has started (race between project creation and
+		// the server activating the AI).
+		seenActive := false
+		pollStart := time.Now()
+		const activationGrace = 30 * time.Second
+
 		err = output.WithSpinner("AI is building...", func() error {
 			return poll.Poll(ctx, poll.DefaultConfig(), func(ctx context.Context) (bool, error) {
 				status, err := apiClient.CheckAIActive(ctx, projectID)
@@ -71,7 +79,18 @@ var buildCmd = &cobra.Command{
 				if status.Status == "error" {
 					return false, fmt.Errorf("AI processing failed with error status")
 				}
-				return !status.Active, nil
+				if status.Active {
+					seenActive = true
+					return false, nil
+				}
+				// AI is not active — only consider done if we've seen it
+				// active at least once, or the grace period has elapsed
+				// (handles the unlikely case where AI starts and finishes
+				// before our first poll).
+				if seenActive || time.Since(pollStart) > activationGrace {
+					return true, nil
+				}
+				return false, nil
 			})
 		})
 		if err != nil {

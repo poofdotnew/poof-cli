@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
@@ -61,6 +62,13 @@ var iterateCmd = &cobra.Command{
 		}
 
 		// 2. Poll until AI finishes
+		// Track whether we've seen the AI become active to avoid declaring
+		// "done" before it has started (race between sending the message
+		// and the server activating the AI).
+		seenActive := false
+		pollStart := time.Now()
+		const activationGrace = 30 * time.Second
+
 		err = output.WithSpinner("AI is working...", func() error {
 			return poll.Poll(ctx, poll.DefaultConfig(), func(ctx context.Context) (bool, error) {
 				status, err := apiClient.CheckAIActive(ctx, projectID)
@@ -70,7 +78,16 @@ var iterateCmd = &cobra.Command{
 				if status.Status == "error" {
 					return false, fmt.Errorf("AI processing failed with error status")
 				}
-				return !status.Active, nil
+				if status.Active {
+					seenActive = true
+					return false, nil
+				}
+				// AI is not active — only consider done if we've seen it
+				// active at least once, or the grace period has elapsed.
+				if seenActive || time.Since(pollStart) > activationGrace {
+					return true, nil
+				}
+				return false, nil
 			})
 		})
 		if err != nil {
@@ -86,7 +103,7 @@ var iterateCmd = &cobra.Command{
 					"results": []interface{}{},
 					"summary": map[string]int{"total": 0, "passed": 0, "failed": 0, "errors": 0, "running": 0},
 				}, func() {
-					output.Success("Done.")
+					output.Success("Done. (no test results)")
 				})
 				return nil
 			}
@@ -94,11 +111,17 @@ var iterateCmd = &cobra.Command{
 		}
 
 		output.Print(results, func() {
-			output.Success("Done!")
-			if results.Summary.Total > 0 {
+			if results.Summary.Total == 0 {
+				output.Success("Done. (no test results)")
+			} else if results.Summary.Failed > 0 || results.Summary.Errors > 0 {
+				output.Warn("Done with test failures.")
 				output.Info("Tests: %d passed, %d failed, %d errors (of %d)",
 					results.Summary.Passed, results.Summary.Failed,
 					results.Summary.Errors, results.Summary.Total)
+			} else {
+				output.Success("Done! All tests passed.")
+				output.Info("Tests: %d passed (of %d)",
+					results.Summary.Passed, results.Summary.Total)
 			}
 		})
 		return nil
