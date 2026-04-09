@@ -132,7 +132,7 @@ poof iterate -p <id> -m "Fix the login button styling"
 
 Sends a chat message, waits for the AI to finish, and shows test results if any exist.
 
-If `poof task test-results -p <id> --json` comes back with `summary.total = 0`, inspect `poof task list -p <id> --json`, `poof chat active -p <id> --json`, `poof logs -p <id>`, and `poof project messages -p <id> --limit 100 --json` before assuming the run is healthy. `task list` shows checkpoints/tasks, but test-tool activity may only be visible in project messages until structured execution records land. When `chat active` stays `true` but there are no new task ids or recent logs, clear the stale state with `poof chat cancel -p <id>` and do one targeted retry instead of stacking generic `iterate` calls.
+If `poof task test-results -p <id> --json` comes back with `summary.total = 0`, inspect `poof task list -p <id> --json`, `poof chat active -p <id> --json`, `poof logs -p <id>`, and `poof project messages -p <id> --limit 100 --json` before assuming the run is healthy. `task list` shows checkpoints/tasks, but test-tool activity may only be visible in project messages until structured execution records land. When `chat active` stays `true` but there are no new task ids or recent logs, clear the stale state with `poof chat cancel -p <id>` and do one targeted retry instead of stacking generic `iterate` calls. If the task list still only shows bootstrap/constants work and that targeted retry also returns an empty summary, treat the run as a Poof execution incident, capture `poof project status` plus smoke evidence, and stop retrying blindly.
 
 #### `poof ship` — Scan, check, and deploy
 
