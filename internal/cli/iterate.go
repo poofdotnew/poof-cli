@@ -103,7 +103,7 @@ var iterateCmd = &cobra.Command{
 					"results": []interface{}{},
 					"summary": map[string]int{"total": 0, "passed": 0, "failed": 0, "errors": 0, "running": 0},
 				}, func() {
-					output.Success("Done. (no test results)")
+					output.Warn("Done, but no test results were found.")
 				})
 				return nil
 			}
@@ -112,7 +112,7 @@ var iterateCmd = &cobra.Command{
 
 		output.Print(results, func() {
 			if results.Summary.Total == 0 {
-				output.Success("Done. (no test results)")
+				output.Warn("Done, but no test results were found.")
 			} else if results.Summary.Failed > 0 || results.Summary.Errors > 0 {
 				output.Warn("Done with test failures.")
 				output.Info("Tests: %d passed, %d failed, %d errors (of %d)",

@@ -108,21 +108,29 @@ var buildCmd = &cobra.Command{
 
 		// Build a response struct for JSON output while also supporting quiet mode
 		type buildResult struct {
-			ProjectID string            `json:"projectId"`
-			URLs      map[string]string `json:"urls"`
-			Project   api.Project       `json:"project"`
+			ProjectID    string                 `json:"projectId"`
+			URLs         map[string]string      `json:"urls"`
+			Project      api.Project            `json:"project"`
+			PublishState map[string]interface{} `json:"publishState,omitempty"`
+			DraftReady   bool                   `json:"draftReady"`
 		}
 		result := &buildResult{
-			ProjectID: projectID,
-			URLs:      status.URLs,
-			Project:   status.Project,
+			ProjectID:    projectID,
+			URLs:         status.URLs,
+			Project:      status.Project,
+			PublishState: status.PublishState,
+			DraftReady:   status.IsTargetDeployed("draft"),
 		}
 
 		if output.GetFormat() == output.FormatQuiet {
 			output.Quiet(projectID)
 		} else {
 			output.Print(result, func() {
-				output.Success("Build complete!")
+				if result.DraftReady {
+					output.Success("Build complete!")
+				} else {
+					output.Warn("Build finished, but the draft deploy is not ready yet.")
+				}
 				output.Info("Project ID: %s", projectID)
 				if draft, ok := status.URLs["draft"]; ok && draft != "" {
 					output.Info("Draft:   %s", draft)
@@ -132,6 +140,9 @@ var buildCmd = &cobra.Command{
 				}
 				if prod, ok := status.URLs["production"]; ok && prod != "" {
 					output.Info("Prod:    %s", prod)
+				}
+				if !result.DraftReady {
+					output.Info("Draft deploy state is still pending. Re-check with 'poof project status -p %s' before treating the draft URL as live.", projectID)
 				}
 			})
 		}

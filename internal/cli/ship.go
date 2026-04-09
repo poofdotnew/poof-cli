@@ -109,9 +109,9 @@ var shipCmd = &cobra.Command{
 			}
 			if strings.Contains(eligibility.Status, "security") {
 				if output.GetFormat() == output.FormatText {
-					output.Warn("Security scan found issues.")
+					output.Warn("Security scan found issues for the %s target.", target)
 				}
-				return fmt.Errorf("deployment blocked by security scan: %s", eligibility.Message)
+				return fmt.Errorf("%s deploy blocked by security scan: %s", target, eligibility.Message)
 			}
 			return fmt.Errorf("not eligible for deployment (%s): %s", eligibility.Status, eligibility.Message)
 		}

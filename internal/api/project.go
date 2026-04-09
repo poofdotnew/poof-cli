@@ -125,6 +125,27 @@ func (r *ProjectStatus) QuietString() string {
 	return strings.Join(parts, "\n")
 }
 
+func (r *ProjectStatus) IsTargetDeployed(target string) bool {
+	if r == nil || r.PublishState == nil {
+		return false
+	}
+	raw, ok := r.PublishState[target]
+	if !ok || raw == nil {
+		return false
+	}
+	state, ok := raw.(map[string]interface{})
+	if !ok {
+		return false
+	}
+	if deployed, ok := state["deployed"].(bool); ok {
+		return deployed
+	}
+	if published, ok := state["published"].(bool); ok {
+		return published
+	}
+	return false
+}
+
 type MessagesResponse struct {
 	Messages []Message `json:"messages"`
 	HasMore  bool      `json:"hasMore"`
