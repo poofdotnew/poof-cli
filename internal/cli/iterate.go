@@ -130,12 +130,13 @@ var iterateCmd = &cobra.Command{
 
 func printNoTestResultsGuidance(projectID string) {
 	output.Warn("Done, but no test results were found.")
-	output.Info("Treat this as missing test artifacts, not a passing run.")
-	output.Info("Inspect: poof task list -p %s --json", projectID)
-	output.Info("Inspect: poof chat active -p %s --json", projectID)
-	output.Info("Inspect: poof logs -p %s", projectID)
-	output.Info("Inspect: poof project messages -p %s --limit 100 --json", projectID)
-	output.Info("If chat is still active with no new task ids or logs, cancel once and do one targeted retry.")
+	output.Info("If you sent a non-test prompt, this is expected — iterate is a general chat command.")
+	output.Info("For strict pass/fail test verification, use: poof verify -p %s", projectID)
+	output.Info("To inspect run state: poof doctor -p %s", projectID)
+	output.Info("If you expected tests to run, also check:")
+	output.Info("  poof task list -p %s --json", projectID)
+	output.Info("  poof chat active -p %s --json", projectID)
+	output.Info("  poof project messages -p %s --limit 100 --json", projectID)
 }
 
 func init() {

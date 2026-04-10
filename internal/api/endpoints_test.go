@@ -282,7 +282,7 @@ func TestPublishProject_Production(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.PublishProject(context.Background(), "proj-1", "production")
+	_, err := client.PublishProject(context.Background(), "proj-1", "production")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -306,7 +306,7 @@ func TestPublishProject_Preview(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.PublishProject(context.Background(), "proj-1", "preview")
+	_, err := client.PublishProject(context.Background(), "proj-1", "preview")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -325,7 +325,7 @@ func TestPublishProject_Mobile(t *testing.T) {
 		AppName:    "Test App",
 		AppIconUrl: "https://example.com/icon.png",
 	}
-	err := client.PublishProject(context.Background(), "proj-1", "mobile", mobileReq)
+	_, err := client.PublishProject(context.Background(), "proj-1", "mobile", mobileReq)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -333,7 +333,7 @@ func TestPublishProject_Mobile(t *testing.T) {
 
 func TestPublishProject_InvalidTarget(t *testing.T) {
 	client := newTestClient("http://localhost:0", &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.PublishProject(context.Background(), "proj-1", "invalid")
+	_, err := client.PublishProject(context.Background(), "proj-1", "invalid")
 	if err == nil {
 		t.Fatal("expected error for invalid target")
 	}

@@ -74,6 +74,8 @@ func init() {
 	rootCmd.AddCommand(preferencesCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(iterateCmd)
+	rootCmd.AddCommand(verifyCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(shipCmd)
 	rootCmd.AddCommand(keygenCmd)
 	rootCmd.AddCommand(configCmd)

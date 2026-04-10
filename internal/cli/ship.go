@@ -62,29 +62,36 @@ var shipCmd = &cobra.Command{
 			return fmt.Errorf("security scan failed: %w", err)
 		}
 		if output.GetFormat() == output.FormatText {
-			output.Success("Security scan initiated (task: %s).", scanResult.TaskID)
+			output.Success("Security scan initiated (scan: %s).", scanResult.ScanID)
 		}
 
-		// Wait for the security scan task to complete
-		if scanResult.TaskID != "" {
+		// Wait for the security scan to actually complete. Note that
+		// scanResult.TaskID is the *target* code checkpoint being scanned and
+		// is already in 'completed' status — polling that would return
+		// instantly. We must poll the security scan record itself.
+		if scanResult.ScanID != "" {
 			err = output.WithSpinner("Waiting for security scan to complete...", func() error {
 				scanPollCfg := poll.Config{
 					InitialDelay:      3 * time.Second,
 					MaxDelay:          10 * time.Second,
 					BackoffFactor:     1.3,
-					Timeout:           5 * time.Minute,
+					Timeout:           10 * time.Minute,
 					MaxConsecutiveErr: 5,
 				}
 				return poll.Poll(ctx, scanPollCfg, func(ctx context.Context) (bool, error) {
-					task, err := apiClient.GetTask(ctx, projectID, scanResult.TaskID)
+					scan, err := apiClient.GetSecurityScan(ctx, projectID, scanResult.ScanID)
 					if err != nil {
 						return false, err
 					}
-					switch task.Task.Status {
+					switch scan.Status {
 					case "completed":
 						return true, nil
 					case "failed":
-						return false, fmt.Errorf("security scan task failed")
+						msg := scan.ErrorMessage
+						if msg == "" {
+							msg = "security scan failed"
+						}
+						return false, fmt.Errorf("security scan failed: %s", msg)
 					default:
 						return false, nil
 					}
@@ -93,6 +100,31 @@ var shipCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("security scan failed: %w", err)
 			}
+
+			// The scan record commits a few seconds before the AI's containing
+			// turn fully wraps up (the AI writes a summary message and the
+			// SDK unregisters). Deploy will refuse to run while AI active is
+			// true, so wait for idle before continuing.
+			err = output.WithSpinner("Waiting for AI session to wind down...", func() error {
+				idlePollCfg := poll.Config{
+					InitialDelay:      2 * time.Second,
+					MaxDelay:          5 * time.Second,
+					BackoffFactor:     1.2,
+					Timeout:           2 * time.Minute,
+					MaxConsecutiveErr: 5,
+				}
+				return poll.Poll(ctx, idlePollCfg, func(ctx context.Context) (bool, error) {
+					status, err := apiClient.CheckAIActive(ctx, projectID)
+					if err != nil {
+						return false, err
+					}
+					return !status.Active, nil
+				})
+			})
+			if err != nil {
+				return fmt.Errorf("AI did not become idle after security scan: %w", err)
+			}
+
 			if output.GetFormat() == output.FormatText {
 				output.Info("Security scan finished. Checking eligibility...")
 			}
@@ -134,6 +166,7 @@ var shipCmd = &cobra.Command{
 			output.Info("Deploying to %s...", target)
 		}
 
+		var publishResult *api.PublishResult
 		switch target {
 		case "mobile":
 			platform, _ := cmd.Flags().GetString("platform")
@@ -155,7 +188,8 @@ var shipCmd = &cobra.Command{
 				IsDraft:           isDraft,
 				TargetEnvironment: targetEnv,
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, mobileReq); err != nil {
+			publishResult, err = apiClient.PublishProject(ctx, projectID, target, mobileReq)
+			if err != nil {
 				return handleError(err)
 			}
 		default:
@@ -178,8 +212,45 @@ var shipCmd = &cobra.Command{
 				}
 				opts.Config = parsed
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
+			publishResult, err = apiClient.PublishProject(ctx, projectID, target, opts)
+			if err != nil {
 				return handleError(err)
+			}
+		}
+
+		// Wait for the deploy task to actually complete. The publish endpoint
+		// returns success once the dev-server accepts the request, but the
+		// real deploy runs asynchronously and only flips publishState[target]
+		// once the dev-server marks the task complete.
+		if publishResult != nil && publishResult.DeploymentTaskID != "" && target != "mobile" {
+			if output.GetFormat() == output.FormatText {
+				output.Info("Waiting for %s deploy to finish...", target)
+			}
+			err = output.WithSpinner(fmt.Sprintf("Waiting for %s deploy...", target), func() error {
+				deployPollCfg := poll.Config{
+					InitialDelay:      4 * time.Second,
+					MaxDelay:          15 * time.Second,
+					BackoffFactor:     1.3,
+					Timeout:           10 * time.Minute,
+					MaxConsecutiveErr: 5,
+				}
+				return poll.Poll(ctx, deployPollCfg, func(ctx context.Context) (bool, error) {
+					task, err := apiClient.GetTask(ctx, projectID, publishResult.DeploymentTaskID)
+					if err != nil {
+						return false, err
+					}
+					switch task.Task.Status {
+					case "completed":
+						return true, nil
+					case "failed":
+						return false, fmt.Errorf("deploy task %s failed", publishResult.DeploymentTaskID)
+					default:
+						return false, nil
+					}
+				})
+			})
+			if err != nil {
+				return fmt.Errorf("%s deploy did not finish: %w", target, err)
 			}
 		}
 

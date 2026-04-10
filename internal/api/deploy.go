@@ -216,7 +216,23 @@ func (c *Client) CheckPublishEligibility(ctx context.Context, projectID string) 
 	return &envelope.Data, nil
 }
 
-func (c *Client) PublishProject(ctx context.Context, projectID, target string, opts ...interface{}) error {
+// PublishResult is the parsed response from a publish call. The deploy task
+// id lets callers (the CLI ship flow, app page, etc.) poll for the actual
+// long-running deploy to complete instead of trusting the synchronous publish
+// success — the dev-server returns 200 to publish immediately and runs the
+// deploy in the background.
+type PublishResult struct {
+	DeploymentTaskID string `json:"deploymentTaskId"`
+	ProjectID        string `json:"projectId"`
+	Status           string `json:"status"`
+}
+
+type publishEnvelope struct {
+	Success bool          `json:"success"`
+	Data    PublishResult `json:"data"`
+}
+
+func (c *Client) PublishProject(ctx context.Context, projectID, target string, opts ...interface{}) (*PublishResult, error) {
 	var path string
 	switch target {
 	case "preview":
@@ -226,20 +242,23 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 	case "mobile":
 		path = fmt.Sprintf("/api/project/%s/mobile/publish", projectID)
 	default:
-		return fmt.Errorf("invalid target %q (valid: preview, production, mobile)", target)
+		return nil, fmt.Errorf("invalid target %q (valid: preview, production, mobile)", target)
 	}
 
 	// Mobile uses a different payload shape (no auth token in body).
 	if target == "mobile" {
 		if len(opts) == 0 {
-			return fmt.Errorf("mobile publish requires a MobilePublishRequest")
+			return nil, fmt.Errorf("mobile publish requires a MobilePublishRequest")
 		}
 		mobileReq, ok := opts[0].(*MobilePublishRequest)
 		if !ok {
-			return fmt.Errorf("mobile publish requires a *MobilePublishRequest")
+			return nil, fmt.Errorf("mobile publish requires a *MobilePublishRequest")
 		}
-		_, err := c.Do(ctx, "POST", path, mobileReq)
-		return err
+		body, err := c.Do(ctx, "POST", path, mobileReq)
+		if err != nil {
+			return nil, err
+		}
+		return parsePublishEnvelope(body, projectID), nil
 	}
 
 	var publishOpts PublishOptions
@@ -253,10 +272,10 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 	// Get the appropriate Tarobase app ID from project status.
 	signedPermit, err := c.getSignedPermitForDeploy(ctx, projectID, target)
 	if err != nil {
-		return fmt.Errorf("failed to generate deploy permit: %w", err)
+		return nil, fmt.Errorf("failed to generate deploy permit: %w", err)
 	}
 
-	_, err = c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
+	body, err := c.doWithTokenBody(ctx, "POST", path, func() (interface{}, error) {
 		token, err := c.AuthManager.GetToken()
 		if err != nil {
 			return nil, err
@@ -278,7 +297,21 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 			ProdConfig:              publishOpts.Config,
 		}, nil
 	})
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return parsePublishEnvelope(body, projectID), nil
+}
+
+func parsePublishEnvelope(body []byte, projectID string) *PublishResult {
+	var env publishEnvelope
+	if err := json.Unmarshal(body, &env); err == nil && env.Data.DeploymentTaskID != "" {
+		if env.Data.ProjectID == "" {
+			env.Data.ProjectID = projectID
+		}
+		return &env.Data
+	}
+	return &PublishResult{ProjectID: projectID}
 }
 
 func (c *Client) DownloadCode(ctx context.Context, projectID string) (*DownloadResponse, error) {

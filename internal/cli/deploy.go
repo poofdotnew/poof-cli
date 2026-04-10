@@ -134,7 +134,7 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				IsDraft:           isDraft,
 				TargetEnvironment: targetEnv,
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, mobileReq); err != nil {
+			if _, err := apiClient.PublishProject(ctx, projectID, target, mobileReq); err != nil {
 				return handleError(err)
 			}
 
@@ -158,7 +158,7 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				}
 				opts.Config = parsed
 			}
-			if err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
+			if _, err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
 				return handleError(err)
 			}
 		}
