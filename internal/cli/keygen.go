@@ -4,10 +4,12 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"fmt"
+	"os"
 
 	"github.com/mr-tron/base58"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var keygenCmd = &cobra.Command{
@@ -31,22 +33,35 @@ var keygenCmd = &cobra.Command{
 		privateKeyB58 := base58.Encode(secretKey)
 		walletAddress := base58.Encode(pub)
 
-		if output.GetFormat() == output.FormatQuiet {
+		data := map[string]string{
+			"privateKey":    privateKeyB58,
+			"walletAddress": walletAddress,
+		}
+
+		// `poof keygen --json` should still emit a JSON document even if
+		// redirected, so JSON mode wins over redirect detection.
+		if output.GetFormat() == output.FormatJSON {
+			output.JSON(data)
+			return nil
+		}
+
+		// When stdout is redirected (e.g. `poof keygen >> .env`) or the user
+		// asked for quiet mode, emit ONLY the env-var lines so the output is
+		// drop-in for .env — no preamble, no trailing Info().
+		stdoutIsTTY := term.IsTerminal(int(os.Stdout.Fd()))
+		if output.GetFormat() == output.FormatQuiet || !stdoutIsTTY {
 			fmt.Printf("SOLANA_PRIVATE_KEY=%s\n", privateKeyB58)
 			fmt.Printf("SOLANA_WALLET_ADDRESS=%s\n", walletAddress)
 			return nil
 		}
-		output.Print(map[string]string{
-			"privateKey":    privateKeyB58,
-			"walletAddress": walletAddress,
-		}, func() {
-			fmt.Println("Generated new Solana keypair:")
-			fmt.Println()
-			fmt.Printf("SOLANA_PRIVATE_KEY=%s\n", privateKeyB58)
-			fmt.Printf("SOLANA_WALLET_ADDRESS=%s\n", walletAddress)
-			fmt.Println()
-			output.Info("Add these to your .env file to use with Poof.")
-		})
+
+		// Interactive terminal text output: show the friendly preamble.
+		fmt.Println("Generated new Solana keypair:")
+		fmt.Println()
+		fmt.Printf("SOLANA_PRIVATE_KEY=%s\n", privateKeyB58)
+		fmt.Printf("SOLANA_WALLET_ADDRESS=%s\n", walletAddress)
+		fmt.Println()
+		output.Info("Add these to your .env file to use with Poof.")
 		return nil
 	},
 }
