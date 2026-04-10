@@ -233,7 +233,8 @@ poof deploy download-url -p <id> --task <taskId>   # get download link
 poof task list -p <id>                 # list the newest 20 project tasks
 poof task list -p <id> --change-id latest  # inspect only the latest change
 poof task get <taskId> -p <id>         # get task details
-poof task test-results -p <id>         # view structured test results
+poof task test-results -p <id>         # view structured test results (latest run per file)
+poof task test-results -p <id> --history  # include older runs that have been superseded
 ```
 
 ### Credits

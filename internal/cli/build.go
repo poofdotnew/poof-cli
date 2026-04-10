@@ -71,7 +71,7 @@ var buildCmd = &cobra.Command{
 		const activationGrace = 30 * time.Second
 
 		err = output.WithSpinner("AI is building...", func() error {
-			return poll.Poll(ctx, poll.DefaultConfig(), func(ctx context.Context) (bool, error) {
+			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
 				status, err := apiClient.CheckAIActive(ctx, projectID)
 				if err != nil {
 					return false, err

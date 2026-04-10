@@ -75,9 +75,16 @@ doctor never sends chat messages and never modifies project state.`,
 			report.Errors = append(report.Errors, fmt.Sprintf("tasks: %v", err))
 		}
 
-		// Test results summary
+		// Test results summary. The server returns raw history — including
+		// older failed runs that the AI already fixed — so collapse to the
+		// most recent result per (source, fileName, testName) before
+		// summarizing. This mirrors verify's freshness logic and prevents
+		// doctor from claiming test failures that no longer apply.
 		if tests, err := apiClient.GetTestResults(ctx, projectID, 100, 0); err == nil {
-			report.TestSummary = &tests.Summary
+			latest := collapseResultsToLatest(tests.Results)
+			summary := summarizeResults(latest)
+			report.TestSummary = &summary
+			report.RawTestSummary = &tests.Summary
 		} else if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
 			report.TestSummary = &api.TestSummary{}
 		} else {
@@ -117,9 +124,29 @@ type doctorReport struct {
 	AI                  *api.AIActiveResponse    `json:"ai,omitempty"`
 	RecentTasks         []map[string]interface{} `json:"recentTasks,omitempty"`
 	TestSummary         *api.TestSummary         `json:"testSummary,omitempty"`
+	RawTestSummary      *api.TestSummary         `json:"rawTestSummary,omitempty"`
 	Probe               *doctorProbeResult       `json:"probe,omitempty"`
 	Verdict             string                   `json:"verdict"`
 	Errors              []string                 `json:"errors,omitempty"`
+}
+
+// collapseResultsToLatest returns the most recent result per
+// (source, fileName). The server returns results sorted by startedAt desc,
+// so the first occurrence wins. We intentionally collapse on file name
+// rather than (file, testName) because the AI often renames the test
+// inside a file between runs and we want the latest file state to win.
+func collapseResultsToLatest(rs []api.TestResult) []api.TestResult {
+	out := make([]api.TestResult, 0, len(rs))
+	seen := make(map[string]struct{}, len(rs))
+	for i := range rs {
+		key := rs[i].Source + "|" + rs[i].FileName
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, rs[i])
+	}
+	return out
 }
 
 func (r *doctorReport) QuietString() string {

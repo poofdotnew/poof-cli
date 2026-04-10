@@ -70,7 +70,7 @@ var iterateCmd = &cobra.Command{
 		const activationGrace = 30 * time.Second
 
 		err = output.WithSpinner("AI is working...", func() error {
-			return poll.Poll(ctx, poll.DefaultConfig(), func(ctx context.Context) (bool, error) {
+			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
 				status, err := apiClient.CheckAIActive(ctx, projectID)
 				if err != nil {
 					return false, err
@@ -94,7 +94,11 @@ var iterateCmd = &cobra.Command{
 			return fmt.Errorf("timed out or failed: %w", err)
 		}
 
-		// 3. Check test results (may not exist for all projects)
+		// 3. Check test results (may not exist for all projects). The server
+		// returns raw history — including older failed runs that the AI
+		// already fixed — so collapse to the most recent result per test
+		// file before summarizing. Prevents iterate from reporting stale
+		// failures the AI has already corrected.
 		results, err := apiClient.GetTestResults(ctx, projectID, 100, 0)
 		if err != nil {
 			if apiErr, ok := api.IsAPIError(err); ok && apiErr.IsNotFound() {
@@ -110,18 +114,26 @@ var iterateCmd = &cobra.Command{
 			return handleError(err)
 		}
 
-		output.Print(results, func() {
-			if results.Summary.Total == 0 {
+		latest := collapseResultsToLatest(results.Results)
+		latestSummary := summarizeResults(latest)
+		viewResults := &api.TestResultsResponse{
+			Results: latest,
+			Summary: latestSummary,
+			HasMore: results.HasMore,
+		}
+
+		output.Print(viewResults, func() {
+			if latestSummary.Total == 0 {
 				printNoTestResultsGuidance(projectID)
-			} else if results.Summary.Failed > 0 || results.Summary.Errors > 0 {
+			} else if latestSummary.Failed > 0 || latestSummary.Errors > 0 {
 				output.Warn("Done with test failures.")
 				output.Info("Tests: %d passed, %d failed, %d errors (of %d)",
-					results.Summary.Passed, results.Summary.Failed,
-					results.Summary.Errors, results.Summary.Total)
+					latestSummary.Passed, latestSummary.Failed,
+					latestSummary.Errors, latestSummary.Total)
 			} else {
 				output.Success("Done! All tests passed.")
 				output.Info("Tests: %d passed (of %d)",
-					results.Summary.Passed, results.Summary.Total)
+					latestSummary.Passed, latestSummary.Total)
 			}
 		})
 		return nil

@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 
+	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -91,8 +92,14 @@ var taskGetCmd = &cobra.Command{
 var taskTestResultsCmd = &cobra.Command{
 	Use:   "test-results",
 	Short: "Get structured test results",
+	Long: `Return structured test results for the project.
+
+By default, results are collapsed to the most recent run per test file so
+stale failures the AI has already re-run and fixed don't pollute the view.
+Pass --history to see the raw server history instead.`,
 	Example: `  poof task test-results -p <id>
-  poof task test-results -p <id> --json | jq '.summary'`,
+  poof task test-results -p <id> --json | jq '.summary'
+  poof task test-results -p <id> --history`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -105,18 +112,29 @@ var taskTestResultsCmd = &cobra.Command{
 
 		limit, _ := cmd.Flags().GetInt("limit")
 		offset, _ := cmd.Flags().GetInt("offset")
+		showHistory, _ := cmd.Flags().GetBool("history")
 		resp, err := apiClient.GetTestResults(context.Background(), projectID, limit, offset)
 		if err != nil {
 			return handleError(err)
 		}
 
-		output.Print(resp, func() {
-			output.Info("Tests: %d total, %d passed, %d failed, %d errors",
-				resp.Summary.Total, resp.Summary.Passed, resp.Summary.Failed, resp.Summary.Errors)
+		view := resp
+		if !showHistory {
+			latest := collapseResultsToLatest(resp.Results)
+			view = &api.TestResultsResponse{
+				Results: latest,
+				Summary: summarizeResults(latest),
+				HasMore: resp.HasMore,
+			}
+		}
 
-			if resp.Summary.Failed > 0 || resp.Summary.Errors > 0 {
+		output.Print(view, func() {
+			output.Info("Tests: %d total, %d passed, %d failed, %d errors",
+				view.Summary.Total, view.Summary.Passed, view.Summary.Failed, view.Summary.Errors)
+
+			if view.Summary.Failed > 0 || view.Summary.Errors > 0 {
 				output.Info("")
-				for _, r := range resp.Results {
+				for _, r := range view.Results {
 					if r.Status == "failed" || r.Status == "error" {
 						if r.Source != "" {
 							output.Error("  [%s] %s: %s", r.Source, r.FileName, r.LastError)
@@ -126,8 +144,11 @@ var taskTestResultsCmd = &cobra.Command{
 					}
 				}
 			}
-			if resp.HasMore {
+			if view.HasMore {
 				output.Info("(more results available — use --offset %d to see next page)", offset+limit)
+			}
+			if !showHistory {
+				output.Info("(showing latest run per test file — pass --history for full history)")
 			}
 		})
 		return nil
@@ -141,6 +162,7 @@ func init() {
 
 	taskTestResultsCmd.Flags().Int("limit", 100, "Max test results to return (1-100)")
 	taskTestResultsCmd.Flags().Int("offset", 0, "Offset for pagination")
+	taskTestResultsCmd.Flags().Bool("history", false, "Show raw server history instead of collapsing to latest run per file")
 
 	taskCmd.AddCommand(taskListCmd)
 	taskCmd.AddCommand(taskGetCmd)

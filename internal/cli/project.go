@@ -216,18 +216,31 @@ var projectStatusCmd = &cobra.Command{
 		output.Print(resp, func() {
 			output.Info("Project: %s", resp.Project.Title)
 			output.Info("ID:      %s", resp.Project.ID)
+			draftFlag := resp.IsTargetDeployed("draft")
+			previewFlag := resp.IsTargetDeployed("preview")
+			liveFlag := resp.IsTargetDeployed("live")
 			if draft, ok := resp.URLs["draft"]; ok && draft != "" {
-				output.Info("Draft:   %s", draft)
+				output.Info("Draft:   %s %s", draft, deployedMarker(draftFlag))
 			}
 			if preview, ok := resp.URLs["mainnetPreview"]; ok && preview != "" {
-				output.Info("Preview: %s", preview)
+				output.Info("Preview: %s %s", preview, deployedMarker(previewFlag))
 			}
 			if prod, ok := resp.URLs["production"]; ok && prod != "" {
-				output.Info("Prod:    %s", prod)
+				output.Info("Prod:    %s %s", prod, deployedMarker(liveFlag))
 			}
+			output.Info("Deploy flags: draft=%v preview=%v live=%v", draftFlag, previewFlag, liveFlag)
 		})
 		return nil
 	},
+}
+
+// deployedMarker returns a compact tag used in text output to make it
+// obvious whether a target has actually been deployed yet.
+func deployedMarker(deployed bool) string {
+	if deployed {
+		return "(deployed)"
+	}
+	return "(not deployed)"
 }
 
 var projectMessagesCmd = &cobra.Command{

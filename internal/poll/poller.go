@@ -26,6 +26,21 @@ func DefaultConfig() Config {
 	}
 }
 
+// LongAIConfig returns a polling config suitable for waiting on long-running
+// AI work (build, iterate, verify). Verification in particular can run 15+
+// minutes because the AI generates tests, runs them, fixes bugs, and reruns.
+// The default 10-minute poll timeout was killing verify flows while the AI
+// was still making progress.
+func LongAIConfig() Config {
+	return Config{
+		InitialDelay:      5 * time.Second,
+		MaxDelay:          30 * time.Second,
+		BackoffFactor:     1.5,
+		Timeout:           30 * time.Minute,
+		MaxConsecutiveErr: 5,
+	}
+}
+
 // CheckFunc is called on each poll iteration.
 // Returns (done, error). done=true means polling succeeded.
 type CheckFunc func(ctx context.Context) (bool, error)

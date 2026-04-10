@@ -87,7 +87,7 @@ Unlike 'poof iterate', this command is strict about evidence:
 		const activationGrace = 30 * time.Second
 
 		err = output.WithSpinner("AI is verifying...", func() error {
-			return poll.Poll(ctx, poll.DefaultConfig(), func(ctx context.Context) (bool, error) {
+			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
 				status, err := apiClient.CheckAIActive(ctx, projectID)
 				if err != nil {
 					return false, err
@@ -130,22 +130,10 @@ Unlike 'poof iterate', this command is strict about evidence:
 			fresh = append(fresh, r)
 		}
 
-		// Collapse multiple runs of the same test in this verify pass to its
-		// most recent result. The server returns results sorted by startedAt
-		// desc, so the first occurrence per (source, fileName, testName) wins.
-		// This way an early failure that the AI fixed and re-ran doesn't get
-		// double-counted as still failing.
-		latestFresh := make([]api.TestResult, 0, len(fresh))
-		seenKey := make(map[string]struct{}, len(fresh))
-		for _, r := range fresh {
-			key := r.Source + "|" + r.FileName + "|" + r.TestName
-			if _, dup := seenKey[key]; dup {
-				continue
-			}
-			seenKey[key] = struct{}{}
-			latestFresh = append(latestFresh, r)
-		}
-		fresh = latestFresh
+		// Collapse multiple runs of the same test file in this verify pass
+		// to its most recent result. An early failure that the AI fixed
+		// and re-ran shouldn't get double-counted as still failing.
+		fresh = collapseResultsToLatest(fresh)
 
 		freshSummary := summarizeResults(fresh)
 
