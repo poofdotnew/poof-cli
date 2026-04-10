@@ -257,19 +257,39 @@ var shipCmd = &cobra.Command{
 		// 4. Get updated status for URLs
 		status, err := apiClient.GetProjectStatus(ctx, projectID)
 		if err == nil {
+			// Resolve the URL that actually corresponds to the target the user
+			// shipped to. The status payload exposes both `urls.preview` (the
+			// draft offchain URL) and `urls.mainnetPreview` (the real preview
+			// deploy), which is confusing — surface only the canonical one for
+			// this target so users see the right link first.
+			var targetURL string
+			switch target {
+			case "preview":
+				targetURL = status.URLs["mainnetPreview"]
+			case "production":
+				targetURL = status.URLs["production"]
+			case "mobile":
+				targetURL = status.URLs["mainnetPreview"]
+			}
+
 			if output.GetFormat() == output.FormatQuiet {
 				output.Quiet(projectID)
 			} else {
 				output.Print(map[string]interface{}{
 					"target":    target,
 					"projectId": projectID,
+					"url":       targetURL,
 					"urls":      status.URLs,
 				}, func() {
 					output.Success("Deployed to %s.", target)
-					for name, url := range status.URLs {
-						if url != "" {
-							output.Info("  %s: %s", name, url)
-						}
+					if targetURL != "" {
+						output.Info("  %s: %s", target, targetURL)
+					}
+					if draft := status.URLs["draft"]; draft != "" && draft != targetURL {
+						output.Info("  draft: %s", draft)
+					}
+					if prod := status.URLs["production"]; prod != "" && prod != targetURL && target != "production" {
+						output.Info("  production: %s", prod)
 					}
 				})
 			}
