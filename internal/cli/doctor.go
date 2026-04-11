@@ -260,9 +260,42 @@ func renderDoctorText(r *doctorReport) {
 		output.Error("Verdict: %s", r.Verdict)
 	}
 
+	if hint := doctorNextStepHint(r); hint != "" {
+		output.Info("Next:    %s", hint)
+	}
+
 	for _, e := range r.Errors {
 		output.Error("  %s", e)
 	}
+}
+
+// doctorNextStepHint gives the agent a single copy-pasteable next command
+// based on the verdict. Keeps the decision tree out of agent prompts.
+func doctorNextStepHint(r *doctorReport) string {
+	switch r.Verdict {
+	case "healthy":
+		if r.LiveDeployedFlag {
+			// Project is already on production. Next step is "nothing to
+			// ship, iterate if there's more work" — agents should stop
+			// shipping and go back to planning.
+			return fmt.Sprintf("production is live — use `poof iterate -p %s -m \"...\"` for further changes, or nothing if done", r.ProjectID)
+		}
+		if r.PreviewDeployedFlag {
+			return fmt.Sprintf("poof ship -p %s -t production --yes   (preview already deployed)", r.ProjectID)
+		}
+		return fmt.Sprintf("poof ship -p %s   (deploy to preview)", r.ProjectID)
+	case "deployed_without_tests":
+		return fmt.Sprintf("poof verify -p %s   (generate + run lifecycle and UI tests)", r.ProjectID)
+	case "deployed_with_test_failures":
+		return fmt.Sprintf("poof iterate -p %s -m \"Fix the failing tests above, then rerun them\"   then: poof verify -p %s", r.ProjectID, r.ProjectID)
+	case "ai_running":
+		return fmt.Sprintf("poof chat active -p %s   (poll until idle, then poof verify)", r.ProjectID)
+	case "deploy_pending":
+		return fmt.Sprintf("poof project status -p %s --json   (re-check deploy flags in 30s)", r.ProjectID)
+	case "incomplete":
+		return "fix the errors above and rerun poof doctor"
+	}
+	return ""
 }
 
 func doctorProbe(ctx context.Context, url string) (int, error) {

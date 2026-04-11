@@ -37,7 +37,7 @@ var iterateCmd = &cobra.Command{
 			message = readStdin()
 		}
 		if message == "" && len(filePaths) == 0 {
-			return fmt.Errorf("--message is required\n  poof iterate -p %s -m \"Add a feature\"", projectID)
+			return fmt.Errorf("--message or --file is required\n  poof iterate -p %s -m \"Add a feature\"\n  poof iterate -p %s --file screenshot.png -m \"Match this design\"", projectID, projectID)
 		}
 
 		ctx := context.Background()
@@ -50,6 +50,21 @@ var iterateCmd = &cobra.Command{
 			}
 			message += suffix
 			attachedFiles = urls
+		}
+
+		// 0. Snapshot existing test result IDs so we can tell agents whether
+		// *new* tests actually ran during this iterate turn. Without this,
+		// iterate would report "all tests passed" from stale history even
+		// when the AI never touched the test suite.
+		baselineIDs := map[string]struct{}{}
+		if baseline, bErr := apiClient.GetTestResults(ctx, projectID, 100, 0); bErr == nil {
+			for _, r := range baseline.Results {
+				if r.ID != "" {
+					baselineIDs[r.ID] = struct{}{}
+				}
+			}
+		} else if apiErr, ok := api.IsAPIError(bErr); !ok || !apiErr.IsNotFound() {
+			return handleError(bErr)
 		}
 
 		// 1. Send chat message
@@ -114,26 +129,73 @@ var iterateCmd = &cobra.Command{
 			return handleError(err)
 		}
 
+		// Split into fresh (created during this iterate turn) vs latest-per-file
+		// views. Agents care about whether tests *actually ran*, so surface both.
+		fresh := make([]api.TestResult, 0, len(results.Results))
+		for _, r := range results.Results {
+			if r.ID == "" {
+				continue
+			}
+			if _, seen := baselineIDs[r.ID]; seen {
+				continue
+			}
+			fresh = append(fresh, r)
+		}
+		fresh = collapseResultsToLatest(fresh)
+		freshSummary := summarizeResults(fresh)
+
 		latest := collapseResultsToLatest(results.Results)
 		latestSummary := summarizeResults(latest)
-		viewResults := &api.TestResultsResponse{
-			Results: latest,
-			Summary: latestSummary,
-			HasMore: results.HasMore,
+
+		type iterateResult struct {
+			Results      []api.TestResult `json:"results"`
+			Summary      api.TestSummary  `json:"summary"`
+			FreshResults []api.TestResult `json:"freshResults"`
+			FreshSummary api.TestSummary  `json:"freshSummary"`
+			HasMore      bool             `json:"hasMore"`
+		}
+		viewResults := &iterateResult{
+			Results:      latest,
+			Summary:      latestSummary,
+			FreshResults: fresh,
+			FreshSummary: freshSummary,
+			HasMore:      results.HasMore,
 		}
 
 		output.Print(viewResults, func() {
-			if latestSummary.Total == 0 {
-				printNoTestResultsGuidance(projectID)
-			} else if latestSummary.Failed > 0 || latestSummary.Errors > 0 {
-				output.Warn("Done with test failures.")
-				output.Info("Tests: %d passed, %d failed, %d errors (of %d)",
+			if freshSummary.Total == 0 {
+				if latestSummary.Total == 0 {
+					printNoTestResultsGuidance(projectID)
+					return
+				}
+				// Previous tests exist but none re-ran this turn. Don't
+				// claim "passed" — be explicit that this iterate didn't
+				// execute the suite.
+				output.Warn("Done, but no tests ran during this turn.")
+				output.Info("Existing suite (latest per file): %d passed, %d failed, %d errors (of %d)",
 					latestSummary.Passed, latestSummary.Failed,
 					latestSummary.Errors, latestSummary.Total)
+				output.Info("If tests should have run, use: poof verify -p %s", projectID)
+				return
+			}
+			if freshSummary.Failed > 0 || freshSummary.Errors > 0 {
+				output.Warn("Done with test failures.")
+				output.Info("Fresh this turn: %d passed, %d failed, %d errors (of %d)",
+					freshSummary.Passed, freshSummary.Failed,
+					freshSummary.Errors, freshSummary.Total)
+				for _, r := range fresh {
+					if r.Status == "failed" || r.Status == "error" {
+						if r.Source != "" {
+							output.Error("  [%s] %s: %s", r.Source, r.FileName, r.LastError)
+						} else {
+							output.Error("  %s: %s", r.FileName, r.LastError)
+						}
+					}
+				}
 			} else {
-				output.Success("Done! All tests passed.")
-				output.Info("Tests: %d passed (of %d)",
-					latestSummary.Passed, latestSummary.Total)
+				output.Success("Done! All fresh tests passed.")
+				output.Info("Fresh this turn: %d passed (of %d)",
+					freshSummary.Passed, freshSummary.Total)
 			}
 		})
 		return nil

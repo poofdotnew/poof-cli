@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -20,9 +23,17 @@ var filesCmd = &cobra.Command{
 
 var filesGetCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Get all source files (requires credit purchase)",
-	Example: `  poof files get -p <id>
-  poof files get -p <id> --json | jq 'keys'`,
+	Short: "Get project source files (requires credit purchase)",
+	Long: `Fetch project source files.
+
+By default this returns the full project. Use --path to filter to a single
+file or glob (e.g. --path "src/**/*.tsx"), --list to show only file paths
+without contents, or --stat to show path + byte count per file. Agents
+should prefer --list or --path over a full dump to keep output small.`,
+	Example: `  poof files get -p <id> --list
+  poof files get -p <id> --path "UI/components/HomePage.tsx"
+  poof files get -p <id> --path "lifecycle-actions/*.json" --json
+  poof files get -p <id> --stat | head -20`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -33,19 +44,148 @@ var filesGetCmd = &cobra.Command{
 			return err
 		}
 
+		pathFilter, _ := cmd.Flags().GetString("path")
+		listOnly, _ := cmd.Flags().GetBool("list")
+		statMode, _ := cmd.Flags().GetBool("stat")
+
 		resp, err := apiClient.GetFiles(context.Background(), projectID)
 		if err != nil {
 			return handleError(err)
 		}
 
-		output.Print(resp, func() {
-			for path := range resp.Files {
+		// Apply path glob filter if requested. Use doublestar semantics via
+		// filepath.Match with manual ** support: first try exact match, then
+		// filepath.Match, then a simple ** prefix/suffix expansion.
+		filtered := resp.Files
+		if pathFilter != "" {
+			filtered = filterFilesByGlob(resp.Files, pathFilter)
+			if len(filtered) == 0 {
+				return fmt.Errorf("no files matched --path %q (total files in project: %d)", pathFilter, len(resp.Files))
+			}
+		}
+
+		if listOnly {
+			type listResp struct {
+				Files []string `json:"files"`
+				Total int      `json:"total"`
+			}
+			paths := make([]string, 0, len(filtered))
+			for p := range filtered {
+				paths = append(paths, p)
+			}
+			sort.Strings(paths)
+			view := &listResp{Files: paths, Total: len(paths)}
+			output.Print(view, func() {
+				for _, p := range paths {
+					output.Info("%s", p)
+				}
+				output.Info("\n%d file(s)", len(paths))
+			})
+			return nil
+		}
+
+		if statMode {
+			type statEntry struct {
+				Path  string `json:"path"`
+				Bytes int    `json:"bytes"`
+			}
+			type statResp struct {
+				Files []statEntry `json:"files"`
+				Total int         `json:"total"`
+				Bytes int         `json:"bytes"`
+			}
+			entries := make([]statEntry, 0, len(filtered))
+			totalBytes := 0
+			for p, c := range filtered {
+				entries = append(entries, statEntry{Path: p, Bytes: len(c)})
+				totalBytes += len(c)
+			}
+			sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+			view := &statResp{Files: entries, Total: len(entries), Bytes: totalBytes}
+			output.Print(view, func() {
+				for _, e := range entries {
+					output.Info("%8d  %s", e.Bytes, e.Path)
+				}
+				output.Info("\n%d file(s), %d bytes total", len(entries), totalBytes)
+			})
+			return nil
+		}
+
+		view := &api.FilesResponse{Files: filtered}
+		output.Print(view, func() {
+			for path := range filtered {
 				output.Info("%s", path)
 			}
-			output.Info("\n%d files total", len(resp.Files))
+			output.Info("\n%d file(s) total", len(filtered))
 		})
 		return nil
 	},
+}
+
+// filterFilesByGlob matches file paths against a pattern. Supports:
+//   - exact match: "src/config.ts"
+//   - bare filename: "HomePage.tsx" (matches any directory)
+//   - single-level glob: "src/*.ts" (no slashes in the * segment)
+//   - doublestar: "**/*.tsx", "src/**/*.tsx"
+//
+// The pattern is translated to a regex for doublestar support so we don't
+// hand-roll matching logic.
+func filterFilesByGlob(files map[string]string, pattern string) map[string]string {
+	out := map[string]string{}
+	if content, ok := files[pattern]; ok {
+		out[pattern] = content
+		return out
+	}
+	re, err := globToRegex(pattern)
+	if err != nil {
+		return out
+	}
+	baseOnly := !strings.ContainsAny(pattern, "/*?[")
+	for path, content := range files {
+		if re.MatchString(path) {
+			out[path] = content
+			continue
+		}
+		if baseOnly && filepath.Base(path) == pattern {
+			out[path] = content
+		}
+	}
+	return out
+}
+
+// globToRegex converts a glob pattern into a Go regular expression. Handles
+// **, *, ?, and escapes regex metacharacters. Anchored at both ends.
+func globToRegex(pattern string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		switch c {
+		case '*':
+			if i+1 < len(pattern) && pattern[i+1] == '*' {
+				// ** matches across path separators
+				b.WriteString(".*")
+				i++
+				// Skip a following slash if present so "**/foo" matches "foo"
+				// directly (no leading dir).
+				if i+1 < len(pattern) && pattern[i+1] == '/' {
+					i++
+				}
+			} else {
+				// single * matches within one path segment
+				b.WriteString("[^/]*")
+			}
+		case '?':
+			b.WriteString("[^/]")
+		case '.', '+', '(', ')', '{', '}', '|', '^', '$', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
 }
 
 var filesUpdateCmd = &cobra.Command{
@@ -152,6 +292,10 @@ var filesUploadCmd = &cobra.Command{
 }
 
 func init() {
+	filesGetCmd.Flags().String("path", "", "Glob pattern filter (e.g. \"src/**/*.tsx\" or \"HomePage.tsx\")")
+	filesGetCmd.Flags().Bool("list", false, "List file paths only (no contents)")
+	filesGetCmd.Flags().Bool("stat", false, "Show byte counts per file (no contents)")
+
 	filesUpdateCmd.Flags().String("from-json", "", "JSON file mapping paths to contents")
 	filesUpdateCmd.Flags().String("file", "", "Single file path to update")
 	filesUpdateCmd.Flags().String("content", "", "Content for the single file")

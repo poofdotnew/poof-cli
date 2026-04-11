@@ -31,18 +31,36 @@ func (r *SecurityScanResponse) QuietString() string { return r.ScanID }
 // are stored as InstantDB date fields, which serialize as either ISO strings
 // or epoch milliseconds, so we use Timestamp to absorb both.
 type SecurityScanStatus struct {
-	ID               string    `json:"id"`
-	ScanNumber       int       `json:"scanNumber"`
-	Status           string    `json:"status"`
-	ScannedTaskID    string    `json:"scannedTaskId"`
-	StartedAt        Timestamp `json:"startedAt"`
-	CompletedAt      Timestamp `json:"completedAt"`
-	TotalFindings    int       `json:"totalFindings"`
-	CriticalSeverity int       `json:"criticalSeverity"`
-	HighSeverity     int       `json:"highSeverity"`
-	MediumSeverity   int       `json:"mediumSeverity"`
-	LowSeverity      int       `json:"lowSeverity"`
-	ErrorMessage     string    `json:"errorMessage"`
+	ID                 string            `json:"id"`
+	ScanNumber         int               `json:"scanNumber"`
+	Status             string            `json:"status"`
+	ScannedTaskID      string            `json:"scannedTaskId"`
+	StartedAt          Timestamp         `json:"startedAt"`
+	CompletedAt        Timestamp         `json:"completedAt"`
+	TotalFindings      int               `json:"totalFindings"`
+	CriticalSeverity   int               `json:"criticalSeverity"`
+	HighSeverity       int               `json:"highSeverity"`
+	MediumSeverity     int               `json:"mediumSeverity"`
+	LowSeverity        int               `json:"lowSeverity"`
+	InformationalCount int               `json:"informationalCount,omitempty"`
+	DeployEligible     *bool             `json:"deployEligible,omitempty"`
+	ErrorMessage       string            `json:"errorMessage"`
+	Findings           []SecurityFinding `json:"findings,omitempty"`
+}
+
+// SecurityFinding is one entry from a scan's findings array. The server
+// stores findings as a JSON string with a flexible schema — we surface the
+// common fields agents need to triage, and keep the rest opaque via
+// RawMessage for callers that want the full record.
+type SecurityFinding struct {
+	ID          string          `json:"id,omitempty"`
+	Severity    string          `json:"severity,omitempty"`
+	Category    string          `json:"category,omitempty"`
+	Title       string          `json:"title,omitempty"`
+	Description string          `json:"description,omitempty"`
+	File        string          `json:"file,omitempty"`
+	Location    string          `json:"location,omitempty"`
+	Raw         json.RawMessage `json:"-"`
 }
 
 type securityScanGetResponse struct {

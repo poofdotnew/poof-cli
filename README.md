@@ -210,7 +210,11 @@ poof chat cancel -p <id>                           # cancel current build
 ### Files
 
 ```bash
-poof files get -p <id>                                    # list all files (paid)
+poof files get -p <id>                                    # full project dump (paid)
+poof files get -p <id> --list                             # paths only, no contents
+poof files get -p <id> --stat                             # paths + byte counts
+poof files get -p <id> --path "src/**/*.tsx"              # glob-filter to matching files
+poof files get -p <id> --path "HomePage.tsx" --json       # single-file fetch
 poof files update -p <id> --file src/config.ts --content "export const X = 1;"
 poof files update -p <id> --from-json files.json          # bulk update from JSON
 ```
@@ -247,7 +251,8 @@ poof credits topup --quantity 5        # buy credits via x402 USDC
 ### Security
 
 ```bash
-poof security scan -p <id>            # run security audit
+poof security scan -p <id>            # initiate scan, return immediately
+poof security scan -p <id> --wait     # block until scan finishes, show findings
 ```
 
 ### Secrets

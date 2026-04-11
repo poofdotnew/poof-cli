@@ -155,12 +155,20 @@ func handleError(err error) error {
 		return err
 	}
 
-	if apiErr.IsCreditsExhausted() {
+	switch {
+	case apiErr.IsCreditsExhausted():
 		return fmt.Errorf("no credits remaining. Run 'poof credits balance' to check, or 'poof credits topup' to buy more")
-	} else if apiErr.IsPaymentRequired() {
+	case apiErr.IsPaymentRequired():
 		return fmt.Errorf("this feature requires a credit purchase. Run 'poof credits topup' first")
-	} else if apiErr.IsAuthError() {
+	case apiErr.IsAuthError():
 		return fmt.Errorf("authentication failed. Run 'poof auth login' to re-authenticate")
+	case apiErr.StatusCode == 403:
+		// "Not authorized" from the server is ambiguous — it means either
+		// the project doesn't exist or the caller isn't the owner. Give
+		// agents the common causes so they can self-diagnose.
+		return fmt.Errorf("not authorized for this project. Check: 1) project ID is correct (poof project list), 2) wallet matches the owner (poof auth status), 3) --env / POOF_ENV matches the environment the project was created in")
+	case apiErr.StatusCode == 404:
+		return fmt.Errorf("not found: %s", apiErr.Message)
 	}
 	return fmt.Errorf("%s", apiErr.Message)
 }
