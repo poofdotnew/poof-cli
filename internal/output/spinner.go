@@ -19,20 +19,20 @@ var heartbeatInterval = 20 * time.Second
 // WithSpinner runs fn while reporting progress.
 //
 // Behavior by output mode:
-//   - Quiet: no output, just run fn.
+//   - Quiet/JSON: no output, just run fn. JSON consumers parse stdout so any
+//     heartbeat noise (even on stderr) pollutes tool-captured output in agents
+//     like Claude Code whose Bash tool merges both streams.
 //   - TTY text: animated spinner on stderr.
 //   - Non-TTY text (agents, pipes, logs): print the start message immediately,
 //     then emit a heartbeat line every heartbeatInterval showing elapsed time.
 //     This gives agents running `poof build` / `poof iterate` / `poof verify`
 //     visible progress in their captured stdout instead of nothing for 5-15 min.
-//   - JSON: also uses the non-TTY heartbeat so streaming consumers still see
-//     activity — heartbeat lines go to stderr so stdout stays valid JSON.
 func WithSpinner(msg string, fn func() error) error {
-	if currentFormat == FormatQuiet {
+	if currentFormat == FormatQuiet || currentFormat == FormatJSON {
 		return fn()
 	}
 
-	if isTerminal() && currentFormat != FormatJSON {
+	if isTerminal() {
 		s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
 		s.Suffix = " " + msg
 		s.Start()
@@ -41,14 +41,8 @@ func WithSpinner(msg string, fn func() error) error {
 		return err
 	}
 
-	// Non-TTY or JSON mode: emit start line + periodic heartbeats.
-	// JSON mode writes to stderr to keep stdout clean for JSON consumers.
-	out := os.Stdout
-	if currentFormat == FormatJSON {
-		out = os.Stderr
-	}
-
-	fmt.Fprintf(out, "… %s\n", msg)
+	// Non-TTY text mode: emit start line + periodic heartbeats.
+	fmt.Fprintf(os.Stdout, "… %s\n", msg)
 
 	stop := make(chan struct{})
 	var wg sync.WaitGroup
@@ -64,7 +58,7 @@ func WithSpinner(msg string, fn func() error) error {
 				return
 			case <-ticker.C:
 				elapsed := time.Since(start).Round(time.Second)
-				fmt.Fprintf(out, "… %s (elapsed %s)\n", msg, elapsed)
+				fmt.Fprintf(os.Stdout, "… %s (elapsed %s)\n", msg, elapsed)
 			}
 		}
 	}()
@@ -75,7 +69,7 @@ func WithSpinner(msg string, fn func() error) error {
 
 	if err == nil {
 		elapsed := time.Since(start).Round(time.Second)
-		fmt.Fprintf(out, "… done (%s)\n", elapsed)
+		fmt.Fprintf(os.Stdout, "… done (%s)\n", elapsed)
 	}
 	return err
 }

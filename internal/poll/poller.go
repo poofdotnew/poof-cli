@@ -73,11 +73,12 @@ func Poll(ctx context.Context, cfg Config, check CheckFunc) error {
 			delay = min(time.Duration(float64(delay)*cfg.BackoffFactor), cfg.MaxDelay)
 			continue
 		}
+		if consecutiveErrs > 0 {
+			delay = cfg.InitialDelay
+		}
 		consecutiveErrs = 0
 		if done {
 			return nil
 		}
-
-		delay = min(time.Duration(float64(delay)*cfg.BackoffFactor), cfg.MaxDelay)
 	}
 }

@@ -100,13 +100,39 @@ var buildCmd = &cobra.Command{
 			return fmt.Errorf("build timed out or failed: %w", err)
 		}
 
-		// 3. Get project status
+		// 3. Wait for draft deploy to become ready (up to 3 minutes)
 		status, err := apiClient.GetProjectStatus(ctx, projectID)
 		if err != nil {
 			return handleError(err)
 		}
 
-		// Build a response struct for JSON output while also supporting quiet mode
+		if !status.IsTargetDeployed("draft") {
+			err = output.WithSpinner("Waiting for draft deploy...", func() error {
+				return poll.Poll(ctx, poll.Config{
+					InitialDelay:      5 * time.Second,
+					MaxDelay:          10 * time.Second,
+					BackoffFactor:     1.0,
+					Timeout:           3 * time.Minute,
+					MaxConsecutiveErr: 5,
+				}, func(ctx context.Context) (bool, error) {
+					s, err := apiClient.GetProjectStatus(ctx, projectID)
+					if err != nil {
+						return false, err
+					}
+					if s.IsTargetDeployed("draft") {
+						status = s
+						return true, nil
+					}
+					return false, nil
+				})
+			})
+			if err != nil {
+				// Not fatal — build succeeded, draft just isn't ready yet
+				status, _ = apiClient.GetProjectStatus(ctx, projectID)
+			}
+		}
+
+		// 4. Report results
 		type buildResult struct {
 			ProjectID    string                 `json:"projectId"`
 			URLs         map[string]string      `json:"urls"`
@@ -133,13 +159,7 @@ var buildCmd = &cobra.Command{
 				}
 				output.Info("Project ID: %s", projectID)
 				if draft, ok := status.URLs["draft"]; ok && draft != "" {
-					output.Info("Draft:   %s", draft)
-				}
-				if preview, ok := status.URLs["mainnetPreview"]; ok && preview != "" {
-					output.Info("Preview: %s", preview)
-				}
-				if prod, ok := status.URLs["production"]; ok && prod != "" {
-					output.Info("Prod:    %s", prod)
+					output.Info("Draft: %s", draft)
 				}
 				if !result.DraftReady {
 					output.Info("Draft deploy state is still pending. Re-check with 'poof project status -p %s' before treating the draft URL as live.", projectID)

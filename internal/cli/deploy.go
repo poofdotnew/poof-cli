@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
+	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/spf13/cobra"
 )
 
@@ -105,6 +107,7 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 
 		ctx := context.Background()
 
+		var publishResult *api.PublishResult
 		switch target {
 		case "mobile":
 			platform, _ := cmd.Flags().GetString("platform")
@@ -134,12 +137,12 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				IsDraft:           isDraft,
 				TargetEnvironment: targetEnv,
 			}
-			if _, err := apiClient.PublishProject(ctx, projectID, target, mobileReq); err != nil {
+			publishResult, err = apiClient.PublishProject(ctx, projectID, target, mobileReq)
+			if err != nil {
 				return handleError(err)
 			}
 
 		default:
-			// preview and production — permit signing is handled automatically by the API client
 			opts := &api.PublishOptions{}
 			if addrs, _ := cmd.Flags().GetString("allowed-addresses"); addrs != "" {
 				opts.AllowedAddresses = strings.Split(addrs, ",")
@@ -158,24 +161,45 @@ func deployTarget(target string) func(cmd *cobra.Command, args []string) error {
 				}
 				opts.Config = parsed
 			}
-			if _, err := apiClient.PublishProject(ctx, projectID, target, opts); err != nil {
+			publishResult, err = apiClient.PublishProject(ctx, projectID, target, opts)
+			if err != nil {
 				return handleError(err)
 			}
 		}
 
-		// Get URLs after deploy
+		if publishResult != nil && publishResult.DeploymentTaskID != "" && target != "mobile" {
+			if err := waitForDeploy(ctx, projectID, publishResult.DeploymentTaskID, target); err != nil {
+				return err
+			}
+		}
+
 		status, err := apiClient.GetProjectStatus(ctx, projectID)
 		if err == nil {
+			var targetURL string
+			switch target {
+			case "preview":
+				targetURL = status.URLs["mainnetPreview"]
+			case "production":
+				targetURL = status.URLs["production"]
+			case "mobile":
+				targetURL = status.URLs["mainnetPreview"]
+			}
+
 			output.Print(map[string]interface{}{
 				"target":    target,
 				"projectId": projectID,
+				"url":       targetURL,
 				"urls":      status.URLs,
 			}, func() {
 				output.Success("Deployed to %s.", target)
-				for name, url := range status.URLs {
-					if url != "" {
-						output.Info("  %s: %s", name, url)
-					}
+				if targetURL != "" {
+					output.Info("  %s: %s", target, targetURL)
+				}
+				if draft := status.URLs["draft"]; draft != "" && draft != targetURL {
+					output.Info("  draft: %s", draft)
+				}
+				if prod := status.URLs["production"]; prod != "" && prod != targetURL && target != "production" {
+					output.Info("  production: %s", prod)
 				}
 			})
 		} else {
@@ -319,6 +343,40 @@ var deployDownloadURLCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+func waitForDeploy(ctx context.Context, projectID, taskID, target string) error {
+	err := output.WithSpinner(fmt.Sprintf("Waiting for %s deploy...", target), func() error {
+		cfg := poll.Config{
+			InitialDelay:      4 * time.Second,
+			MaxDelay:          15 * time.Second,
+			BackoffFactor:     1.3,
+			Timeout:           10 * time.Minute,
+			MaxConsecutiveErr: 5,
+		}
+		return poll.Poll(ctx, cfg, func(ctx context.Context) (bool, error) {
+			task, pollErr := apiClient.GetTask(ctx, projectID, taskID)
+			if pollErr != nil {
+				return false, pollErr
+			}
+			switch task.Task.Status {
+			case "completed":
+				return true, nil
+			case "failed":
+				return false, fmt.Errorf("deploy task %s failed", taskID)
+			default:
+				return false, nil
+			}
+		})
+	})
+	if err != nil {
+		task, checkErr := apiClient.GetTask(ctx, projectID, taskID)
+		if checkErr == nil && task.Task.Status == "completed" {
+			return nil
+		}
+		return fmt.Errorf("%s deploy did not finish: %w", target, err)
+	}
+	return nil
 }
 
 func init() {

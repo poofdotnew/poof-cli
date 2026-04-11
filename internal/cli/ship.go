@@ -226,31 +226,8 @@ var shipCmd = &cobra.Command{
 			if output.GetFormat() == output.FormatText {
 				output.Info("Waiting for %s deploy to finish...", target)
 			}
-			err = output.WithSpinner(fmt.Sprintf("Waiting for %s deploy...", target), func() error {
-				deployPollCfg := poll.Config{
-					InitialDelay:      4 * time.Second,
-					MaxDelay:          15 * time.Second,
-					BackoffFactor:     1.3,
-					Timeout:           10 * time.Minute,
-					MaxConsecutiveErr: 5,
-				}
-				return poll.Poll(ctx, deployPollCfg, func(ctx context.Context) (bool, error) {
-					task, err := apiClient.GetTask(ctx, projectID, publishResult.DeploymentTaskID)
-					if err != nil {
-						return false, err
-					}
-					switch task.Task.Status {
-					case "completed":
-						return true, nil
-					case "failed":
-						return false, fmt.Errorf("deploy task %s failed", publishResult.DeploymentTaskID)
-					default:
-						return false, nil
-					}
-				})
-			})
-			if err != nil {
-				return fmt.Errorf("%s deploy did not finish: %w", target, err)
+			if err := waitForDeploy(ctx, projectID, publishResult.DeploymentTaskID, target); err != nil {
+				return err
 			}
 		}
 

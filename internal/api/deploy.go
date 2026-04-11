@@ -199,6 +199,13 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
 		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
 	}
+	if !envelope.Success {
+		msg := envelope.Error
+		if msg == "" {
+			msg = "deploy trigger returned success=false"
+		}
+		return nil, fmt.Errorf("deploy trigger failed: %s", msg)
+	}
 	return &envelope.Data, nil
 }
 
@@ -258,7 +265,7 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 		if err != nil {
 			return nil, err
 		}
-		return parsePublishEnvelope(body, projectID), nil
+		return parsePublishEnvelope(body, projectID)
 	}
 
 	var publishOpts PublishOptions
@@ -300,18 +307,21 @@ func (c *Client) PublishProject(ctx context.Context, projectID, target string, o
 	if err != nil {
 		return nil, err
 	}
-	return parsePublishEnvelope(body, projectID), nil
+	return parsePublishEnvelope(body, projectID)
 }
 
-func parsePublishEnvelope(body []byte, projectID string) *PublishResult {
+func parsePublishEnvelope(body []byte, projectID string) (*PublishResult, error) {
 	var env publishEnvelope
-	if err := json.Unmarshal(body, &env); err == nil && env.Data.DeploymentTaskID != "" {
-		if env.Data.ProjectID == "" {
-			env.Data.ProjectID = projectID
-		}
-		return &env.Data
+	if err := json.Unmarshal(body, &env); err != nil {
+		return nil, fmt.Errorf("failed to parse publish response: %w", err)
 	}
-	return &PublishResult{ProjectID: projectID}
+	if !env.Success {
+		return nil, fmt.Errorf("publish returned success=false")
+	}
+	if env.Data.ProjectID == "" {
+		env.Data.ProjectID = projectID
+	}
+	return &env.Data, nil
 }
 
 func (c *Client) DownloadCode(ctx context.Context, projectID string) (*DownloadResponse, error) {

@@ -277,7 +277,7 @@ func TestPublishProject_Production(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		w.Write([]byte(`{"success":true,"data":{"deploymentTaskId":"task-1","projectId":"proj-1"}}`))
 	}))
 	defer srv.Close()
 
@@ -301,7 +301,7 @@ func TestPublishProject_Preview(t *testing.T) {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		w.Write([]byte(`{"success":true,"data":{"deploymentTaskId":"task-1","projectId":"proj-1"}}`))
 	}))
 	defer srv.Close()
 
@@ -315,7 +315,7 @@ func TestPublishProject_Preview(t *testing.T) {
 func TestPublishProject_Mobile(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		w.Write([]byte(`{"success":true,"data":{"deploymentTaskId":"task-1","projectId":"proj-1"}}`))
 	}))
 	defer srv.Close()
 
