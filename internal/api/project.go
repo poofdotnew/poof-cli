@@ -40,11 +40,12 @@ func (t Timestamp) MarshalJSON() ([]byte, error) {
 
 // Project represents a Poof project.
 type Project struct {
-	ID          string `json:"id"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Slug        string `json:"slug"`
-	IsPublic    bool   `json:"isPublic"`
+	ID             string `json:"id"`
+	Title          string `json:"title"`
+	Description    string `json:"description"`
+	Slug           string `json:"slug"`
+	IsPublic       bool   `json:"isPublic"`
+	GenerationMode string `json:"generationMode,omitempty"`
 }
 
 type ListProjectsResponse struct {

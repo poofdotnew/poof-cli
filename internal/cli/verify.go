@@ -23,6 +23,22 @@ const defaultVerifyPrompt = `Please verify everything you just built end-to-end.
 
 When everything passes, end your turn with a short summary of what you tested and the final pass counts.`
 
+// backendOnlyVerifyPrompt is used when the project's generationMode excludes a
+// Poof-generated UI (e.g. "policy" or "backend,policy"). The draft URL for these
+// projects serves a placeholder shell until a local static frontend is uploaded
+// via `poof deploy static`, so asking the AI to "run UI functional tests against
+// the draft app" produces vacuous passes against the placeholder. This prompt
+// sticks to lifecycle/policy tests only.
+const backendOnlyVerifyPrompt = `Please verify the backend you just built end-to-end. This project is backend-only (generationMode excludes ui), so do NOT generate or run any UI functional tests — there is no Poof-generated frontend to test against. Do the following in one turn:
+
+1. Generate lifecycle action tests under lifecycle-actions/test-*.json that exercise every policy you created. Cover both success and failure cases — verify that authorized callers can perform operations and unauthorized callers are denied. Run them and report results.
+
+2. Fix any failures you uncover and re-run the tests until they pass. Do not skip failing tests.
+
+3. Do NOT create any lifecycle-actions/ui-test-*.json files and do NOT run the browser UI test runner. This project has no Poof-generated UI. If the user has deployed a local static frontend via 'poof deploy static' and wants UI tests, they will ask explicitly.
+
+When everything passes, end your turn with a short summary of what policies you tested and the final pass counts.`
+
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "Run the canonical post-build verification flow",
@@ -37,6 +53,8 @@ Unlike 'poof iterate', this command is strict about evidence:
 	Example: `  poof verify -p <id>
   poof verify -p <id> --json
   poof verify -p <id> --skip-url-probe
+  poof verify -p <id> --ui-tests=false      # force lifecycle-only prompt
+  poof verify -p <id> --ui-tests=true       # force full prompt even for backend-only projects
   poof verify -p <id> -m "Run only the existing tests, do not generate new ones"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -48,13 +66,63 @@ Unlike 'poof iterate', this command is strict about evidence:
 			return err
 		}
 
-		message, _ := cmd.Flags().GetString("message")
+		messageOverride, _ := cmd.Flags().GetString("message")
 		skipProbe, _ := cmd.Flags().GetBool("skip-url-probe")
-		if strings.TrimSpace(message) == "" {
-			message = defaultVerifyPrompt
-		}
+		uiTestsFlag, _ := cmd.Flags().GetString("ui-tests")
 
 		ctx := context.Background()
+
+		// Decide which prompt to send based on generationMode and the --ui-tests
+		// flag. An explicit --message always wins.
+		var message string
+		var uiTestsEnabled bool
+		switch strings.ToLower(strings.TrimSpace(uiTestsFlag)) {
+		case "true", "yes", "on", "1":
+			message = defaultVerifyPrompt
+			uiTestsEnabled = true
+		case "false", "no", "off", "0":
+			message = backendOnlyVerifyPrompt
+			uiTestsEnabled = false
+		default: // auto / empty
+			// Two independent signals can route us to the lifecycle-only prompt:
+			//   1. generationMode excludes `ui` (backend,policy or policy) —
+			//      the project was created as backend-only, so Poof never had
+			//      the UI source and any UI test prompt would be vacuous.
+			//   2. The project has a prior static_deploy task — the agent
+			//      uploaded a local dist, so Poof's AI only sees the minified
+			//      bundle. UI tests against it are unreliable regardless of
+			//      generationMode.
+			// Either signal is sufficient. We fall back to the default
+			// (UI-tests-enabled) prompt only when BOTH signals say "UI is
+			// Poof-owned and in-source."
+			genMode, gmErr := fetchGenerationMode(ctx, projectID)
+			hasStaticDeploy, sdErr := projectHasStaticDeployTask(ctx, projectID)
+
+			switch {
+			case gmErr == nil && generationModeExcludesUI(genMode):
+				message = backendOnlyVerifyPrompt
+				uiTestsEnabled = false
+				if output.GetFormat() == output.FormatText {
+					output.Info("Detected generationMode=%q — running lifecycle tests only. Use --ui-tests=true to force UI tests.", genMode)
+				}
+			case sdErr == nil && hasStaticDeploy:
+				message = backendOnlyVerifyPrompt
+				uiTestsEnabled = false
+				if output.GetFormat() == output.FormatText {
+					output.Info("Detected a prior static_deploy task — the draft URL is serving your locally-built dist, which Poof's AI cannot read. Running lifecycle tests only. Use --ui-tests=true to force UI tests (not recommended for static deploys).")
+				}
+			default:
+				// Both signals absent or errored. Use the full prompt; worst
+				// case the user is on an older server without generationMode
+				// in the schema and gets redundant UI test generation.
+				message = defaultVerifyPrompt
+				uiTestsEnabled = true
+			}
+		}
+		if strings.TrimSpace(messageOverride) != "" {
+			message = messageOverride
+		}
+		_ = uiTestsEnabled // reserved for future use in JSON output
 
 		// 1. Snapshot existing test result IDs so we can detect what is fresh.
 		baselineIDs := map[string]struct{}{}
@@ -261,7 +329,61 @@ func probeDraftURL(ctx context.Context, url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+// fetchGenerationMode reads the project's generationMode via the status API.
+// Returns "" if the field is missing (older server) — callers fall back to the
+// full prompt in that case.
+func fetchGenerationMode(ctx context.Context, projectID string) (string, error) {
+	status, err := apiClient.GetProjectStatus(ctx, projectID)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(status.Project.GenerationMode), nil
+}
+
+// generationModeExcludesUI returns true when the project was built without a
+// Poof-generated UI — i.e. the draft URL is a placeholder shell until the user
+// deploys their own static frontend. The server accepts values like "full",
+// "policy", "ui,policy", "backend,policy". "full" and anything containing "ui"
+// includes a Poof-generated UI.
+func generationModeExcludesUI(mode string) bool {
+	m := strings.ToLower(strings.TrimSpace(mode))
+	if m == "" || m == "full" {
+		return false
+	}
+	for _, part := range strings.Split(m, ",") {
+		if strings.TrimSpace(part) == "ui" {
+			return false
+		}
+	}
+	return true
+}
+
+// projectHasStaticDeployTask scans the most recent 50 tasks for any with
+// focusArea == "static_deploy". When present, the draft URL is serving a
+// locally-built dist that Poof's AI can't read — so asking it to generate UI
+// tests produces vacuous DOM-shape assertions. This is a belt-and-suspenders
+// check that works even when generationMode is missing from the project record
+// (older servers / schemas that silently drop the attribute).
+func projectHasStaticDeployTask(ctx context.Context, projectID string) (bool, error) {
+	resp, err := apiClient.ListTasks(ctx, projectID, "", 50, 0)
+	if err != nil {
+		return false, err
+	}
+	for _, t := range resp.Tasks {
+		if fa, ok := t["focusArea"].(string); ok && fa == "static_deploy" {
+			return true, nil
+		}
+		// focusAreas is a JSON-stringified array on the server — treat the
+		// substring "static_deploy" as a match to avoid double JSON parsing.
+		if fas, ok := t["focusAreas"].(string); ok && strings.Contains(fas, "static_deploy") {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func init() {
 	verifyCmd.Flags().StringP("message", "m", "", "Override the canonical verification prompt")
 	verifyCmd.Flags().Bool("skip-url-probe", false, "Skip the draft URL HEAD probe")
+	verifyCmd.Flags().String("ui-tests", "auto", "Include browser UI functional tests: auto (infer from generationMode) | true | false")
 }
