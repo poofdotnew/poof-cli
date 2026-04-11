@@ -113,10 +113,39 @@ should prefer --list or --path over a full dump to keep output small.`,
 
 		view := &api.FilesResponse{Files: filtered}
 		output.Print(view, func() {
-			for path := range filtered {
-				output.Info("%s", path)
+			// When a path filter narrowed the result, default to printing the
+			// contents with file headers so agents (and humans) can actually
+			// read the requested file. Without a filter we'd dump the entire
+			// project, which is almost never useful in text mode — fall back
+			// to a path listing with a hint in that case.
+			if pathFilter != "" {
+				paths := make([]string, 0, len(filtered))
+				for p := range filtered {
+					paths = append(paths, p)
+				}
+				sort.Strings(paths)
+				for i, p := range paths {
+					if i > 0 {
+						output.Info("")
+					}
+					output.Info("==> %s <==", p)
+					content := filtered[p]
+					output.Raw(content)
+					if !strings.HasSuffix(content, "\n") {
+						output.Info("")
+					}
+				}
+				return
 			}
-			output.Info("\n%d file(s) total", len(filtered))
+			paths := make([]string, 0, len(filtered))
+			for p := range filtered {
+				paths = append(paths, p)
+			}
+			sort.Strings(paths)
+			for _, p := range paths {
+				output.Info("%s", p)
+			}
+			output.Info("\n%d file(s) total — pass --path <glob> to read contents, or --json to dump all", len(filtered))
 		})
 		return nil
 	},

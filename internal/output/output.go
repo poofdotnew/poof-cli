@@ -68,6 +68,17 @@ func Quiet(val string) {
 	fmt.Println(val)
 }
 
+// Raw prints a literal string to stdout without any formatting, prefixes, or
+// % interpretation. Used for dumping file contents and other bytes-in-bytes-out
+// payloads. Suppressed in quiet mode so callers can emit only the minimal
+// summary in that format.
+func Raw(s string) {
+	if currentFormat == FormatQuiet {
+		return
+	}
+	fmt.Print(s)
+}
+
 // Print renders data based on the current format.
 // humanFn is called for text format; data is used for JSON format.
 func Print(data interface{}, humanFn func()) {
