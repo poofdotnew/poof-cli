@@ -3,11 +3,9 @@ package cli
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
-	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/spf13/cobra"
 )
 
@@ -76,35 +74,8 @@ var iterateCmd = &cobra.Command{
 			output.Info("Message sent. AI is building...")
 		}
 
-		// 2. Poll until AI finishes
-		// Track whether we've seen the AI become active to avoid declaring
-		// "done" before it has started (race between sending the message
-		// and the server activating the AI).
-		seenActive := false
-		pollStart := time.Now()
-		const activationGrace = 30 * time.Second
-
-		err = output.WithSpinner("AI is working...", func() error {
-			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
-				status, err := apiClient.CheckAIActive(ctx, projectID)
-				if err != nil {
-					return false, err
-				}
-				if status.Status == "error" {
-					return false, fmt.Errorf("AI processing failed with error status")
-				}
-				if status.Active {
-					seenActive = true
-					return false, nil
-				}
-				// AI is not active — only consider done if we've seen it
-				// active at least once, or the grace period has elapsed.
-				if seenActive || time.Since(pollStart) > activationGrace {
-					return true, nil
-				}
-				return false, nil
-			})
-		})
+		// 2. Poll until AI finishes (auto-cancels on timeout so ship isn't blocked)
+		err = pollAIUntilIdle(ctx, projectID, "AI is working...")
 		if err != nil {
 			return fmt.Errorf("timed out or failed: %w", err)
 		}

@@ -9,7 +9,6 @@ import (
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
-	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/spf13/cobra"
 )
 
@@ -148,31 +147,8 @@ Unlike 'poof iterate', this command is strict about evidence:
 			return handleError(err)
 		}
 
-		// 3. Poll until AI is done. Mirror build/iterate semantics with a grace
-		// period so we never call it done before the server activates the AI.
-		seenActive := false
-		pollStart := time.Now()
-		const activationGrace = 30 * time.Second
-
-		err = output.WithSpinner("AI is verifying...", func() error {
-			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
-				status, err := apiClient.CheckAIActive(ctx, projectID)
-				if err != nil {
-					return false, err
-				}
-				if status.Status == "error" {
-					return false, fmt.Errorf("AI processing failed with error status")
-				}
-				if status.Active {
-					seenActive = true
-					return false, nil
-				}
-				if seenActive || time.Since(pollStart) > activationGrace {
-					return true, nil
-				}
-				return false, nil
-			})
-		})
+		// 3. Poll until AI is done (auto-cancels on timeout so ship isn't blocked)
+		err = pollAIUntilIdle(ctx, projectID, "AI is verifying...")
 		if err != nil {
 			return fmt.Errorf("verify timed out or failed: %w", err)
 		}

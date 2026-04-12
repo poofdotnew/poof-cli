@@ -62,37 +62,8 @@ var buildCmd = &cobra.Command{
 			output.Success("Project created: %s", projectID)
 		}
 
-		// 2. Poll until AI finishes
-		// Track whether we've seen the AI become active to avoid declaring
-		// "done" before it has started (race between project creation and
-		// the server activating the AI).
-		seenActive := false
-		pollStart := time.Now()
-		const activationGrace = 30 * time.Second
-
-		err = output.WithSpinner("AI is building...", func() error {
-			return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
-				status, err := apiClient.CheckAIActive(ctx, projectID)
-				if err != nil {
-					return false, err
-				}
-				if status.Status == "error" {
-					return false, fmt.Errorf("AI processing failed with error status")
-				}
-				if status.Active {
-					seenActive = true
-					return false, nil
-				}
-				// AI is not active — only consider done if we've seen it
-				// active at least once, or the grace period has elapsed
-				// (handles the unlikely case where AI starts and finishes
-				// before our first poll).
-				if seenActive || time.Since(pollStart) > activationGrace {
-					return true, nil
-				}
-				return false, nil
-			})
-		})
+		// 2. Poll until AI finishes (auto-cancels on timeout so ship isn't blocked)
+		err = pollAIUntilIdle(ctx, projectID, "AI is building...")
 		if err != nil {
 			if output.GetFormat() == output.FormatText {
 				output.Info("Project ID: %s (you can check status with 'poof project status -p %s')", projectID, projectID)
@@ -127,8 +98,11 @@ var buildCmd = &cobra.Command{
 				})
 			})
 			if err != nil {
-				// Not fatal — build succeeded, draft just isn't ready yet
-				status, _ = apiClient.GetProjectStatus(ctx, projectID)
+				// Not fatal — build succeeded, draft just isn't ready yet.
+				// Re-fetch but keep the original status if the re-fetch also fails.
+				if s, sErr := apiClient.GetProjectStatus(ctx, projectID); sErr == nil {
+					status = s
+				}
 			}
 		}
 

@@ -1,14 +1,17 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/auth"
 	"github.com/poofdotnew/poof-cli/internal/config"
 	"github.com/poofdotnew/poof-cli/internal/output"
+	"github.com/poofdotnew/poof-cli/internal/poll"
 	"github.com/poofdotnew/poof-cli/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -44,6 +47,8 @@ var rootCmd = &cobra.Command{
 		}
 		if flagJSON {
 			output.SetFormat(output.FormatJSON)
+			// Suppress cobra's "Error: ..." line; Execute() emits errors as JSON.
+			cmd.Root().SilenceErrors = true
 		}
 		if flagQuiet {
 			output.SetFormat(output.FormatQuiet)
@@ -86,6 +91,12 @@ func init() {
 // Execute runs the root command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		if output.GetFormat() == output.FormatJSON {
+			// Emit the error as structured JSON so agents parsing stdout
+			// with 2>&1 get valid JSON instead of a bare "Error: ..." line
+			// that corrupts the stream.
+			output.JSON(map[string]string{"error": err.Error()})
+		}
 		os.Exit(1)
 	}
 }
@@ -173,4 +184,41 @@ func handleError(err error) error {
 		return fmt.Errorf("not found: %s", apiErr.Message)
 	}
 	return fmt.Errorf("%s", apiErr.Message)
+}
+
+// pollAIUntilIdle polls the AI active endpoint until the AI finishes. It uses
+// an activation grace period to avoid declaring "done" before the server has
+// even started the AI. If the poll times out, the function cancels the AI
+// session so subsequent commands (e.g. poof ship) aren't blocked by a stale
+// active session.
+func pollAIUntilIdle(ctx context.Context, projectID, spinnerMsg string) error {
+	seenActive := false
+	pollStart := time.Now()
+	const activationGrace = 30 * time.Second
+
+	err := output.WithSpinner(spinnerMsg, func() error {
+		return poll.Poll(ctx, poll.LongAIConfig(), func(ctx context.Context) (bool, error) {
+			status, err := apiClient.CheckAIActive(ctx, projectID)
+			if err != nil {
+				return false, err
+			}
+			if status.Status == "error" {
+				return false, fmt.Errorf("AI processing failed with error status")
+			}
+			if status.Active {
+				seenActive = true
+				return false, nil
+			}
+			if seenActive || time.Since(pollStart) > activationGrace {
+				return true, nil
+			}
+			return false, nil
+		})
+	})
+	if err != nil {
+		cancelCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = apiClient.CancelAI(cancelCtx, projectID)
+	}
+	return err
 }
