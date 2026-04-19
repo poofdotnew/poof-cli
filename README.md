@@ -110,9 +110,13 @@ These chain multiple operations together with polling and progress display.
 ```bash
 poof build -m "Build a todo app with Solana wallet auth"
 poof build -m "NFT marketplace" --mode policy --public=false
+poof build -m "Match this UI" --file screenshot.png
+poof build -m "Mirror both designs" --file page1.png --file page2.png
 ```
 
 Creates a project, waits for the AI to finish building, and prints the project ID plus any currently known URLs. For automation, trust `poof project status -p <id> --json | jq '.publishState.draft.deployed'` as the draft-deployment signal rather than assuming the presence of a draft URL means it is already serving traffic.
+
+When `--file` is provided, the CLI uploads each image to Poof's global storage first and embeds the resulting `<userUploadedFile>` URLs into the initial build prompt, so the image is part of the AI's very first message (not a follow-up). Supported formats: PNG, JPEG, GIF, WebP (max 3.4MB each).
 
 **Flags:**
 
@@ -122,6 +126,7 @@ Creates a project, waits for the AI to finish building, and prints the project I
 | `--mode`        | `full`     | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy` |
 | `--public`      | `true`     | Make project publicly visible                                    |
 | `--stdin`       | `false`    | Read message from stdin                                          |
+| `--file`        | (none)     | Image file(s) to attach (repeatable, PNG/JPEG/GIF/WebP, ≤3.4MB)  |
 
 #### `poof iterate` — Chat and check results
 

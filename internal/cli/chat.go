@@ -25,6 +25,29 @@ const maxImageSizeMB = 3.4
 
 // uploadAndPrepareFiles uploads image files and returns the message suffix and CDN URLs.
 func uploadAndPrepareFiles(ctx context.Context, projectID string, filePaths []string) (string, []string, error) {
+	return uploadFilesWith(ctx, filePaths, func(ctx context.Context, encoded, contentType, fileName string) (string, error) {
+		resp, err := apiClient.UploadImage(ctx, projectID, encoded, contentType, fileName)
+		if err != nil {
+			return "", err
+		}
+		return resp.URL, nil
+	})
+}
+
+// uploadAndPrepareFilesGlobal uploads image files to the global (non-project)
+// Tarobase app. Used by `poof build --file`, where the project doesn't exist
+// yet so the project-scoped upload endpoint can't be used.
+func uploadAndPrepareFilesGlobal(ctx context.Context, filePaths []string) (string, []string, error) {
+	return uploadFilesWith(ctx, filePaths, func(ctx context.Context, encoded, contentType, fileName string) (string, error) {
+		resp, err := apiClient.UploadImageGlobal(ctx, encoded, contentType, fileName)
+		if err != nil {
+			return "", err
+		}
+		return resp.URL, nil
+	})
+}
+
+func uploadFilesWith(ctx context.Context, filePaths []string, upload func(ctx context.Context, encoded, contentType, fileName string) (string, error)) (string, []string, error) {
 	var messageAppend string
 	var urls []string
 
@@ -40,8 +63,8 @@ func uploadAndPrepareFiles(ctx context.Context, projectID string, filePaths []st
 			return "", nil, fmt.Errorf("failed to read %s: %w", fp, err)
 		}
 
-		sizeLimitMB := maxImageSizeMB
-		maxBytes := int(sizeLimitMB * 1024 * 1024)
+		sizeLimit := maxImageSizeMB
+		maxBytes := int(sizeLimit * 1024 * 1024)
 		if len(data) > maxBytes {
 			return "", nil, fmt.Errorf("%s exceeds %.1fMB limit (%d bytes)", fp, maxImageSizeMB, len(data))
 		}
@@ -50,13 +73,13 @@ func uploadAndPrepareFiles(ctx context.Context, projectID string, filePaths []st
 		fileName := filepath.Base(fp)
 
 		output.Info("Uploading %s...", fileName)
-		resp, err := apiClient.UploadImage(ctx, projectID, encoded, contentType, fileName)
+		url, err := upload(ctx, encoded, contentType, fileName)
 		if err != nil {
 			return "", nil, fmt.Errorf("failed to upload %s: %w", fileName, err)
 		}
 
-		urls = append(urls, resp.URL)
-		messageAppend += fmt.Sprintf(` <userUploadedFile type="image">%s</userUploadedFile>`, resp.URL)
+		urls = append(urls, url)
+		messageAppend += fmt.Sprintf(` <userUploadedFile type="image">%s</userUploadedFile>`, url)
 	}
 
 	return messageAppend, urls, nil

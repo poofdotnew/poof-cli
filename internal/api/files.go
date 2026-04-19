@@ -105,3 +105,36 @@ func (c *Client) UploadImage(ctx context.Context, projectID, imageBase64, conten
 		FileKey: envelope.Data.FileKey,
 	}, nil
 }
+
+// UploadImageGlobal uploads an image to the global Tarobase app (no project
+// required). Used by `poof build --file` so the image URL can be included in
+// the initial firstMessage before any project exists.
+func (c *Client) UploadImageGlobal(ctx context.Context, imageBase64, contentType, fileName string) (*UploadImageResponse, error) {
+	body, err := c.doWithTokenBody(ctx, "POST", "/api/upload-image", func() (interface{}, error) {
+		token, err := c.AuthManager.GetToken()
+		if err != nil {
+			return nil, err
+		}
+		return UploadImageRequest{
+			ImageBase64:   imageBase64,
+			ContentType:   contentType,
+			FileName:      fileName,
+			TarobaseToken: token,
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	var envelope uploadImageEnvelope
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	if !envelope.Success {
+		return nil, fmt.Errorf("upload failed: %s", envelope.Error)
+	}
+	return &UploadImageResponse{
+		URL:     envelope.Data.URL,
+		FileKey: envelope.Data.FileKey,
+	}, nil
+}

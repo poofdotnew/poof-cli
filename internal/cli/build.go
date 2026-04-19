@@ -18,6 +18,7 @@ var buildCmd = &cobra.Command{
 	Example: `  poof build -m "Build a token-gated voting app"
   poof build -m "NFT marketplace" --mode policy
   poof build -m "Staking dashboard" --public=false
+  poof build -m "Match this UI" --file screenshot.png
   echo "Build a chat app" | poof build --stdin
   poof build -m "DEX" --json | jq '.urls.draft'`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -27,6 +28,7 @@ var buildCmd = &cobra.Command{
 
 		message, _ := cmd.Flags().GetString("message")
 		useStdin, _ := cmd.Flags().GetBool("stdin")
+		filePaths, _ := cmd.Flags().GetStringSlice("file")
 
 		if useStdin {
 			message = readStdin()
@@ -43,6 +45,20 @@ var buildCmd = &cobra.Command{
 		}
 
 		ctx := context.Background()
+
+		// 1a. Upload any attached images BEFORE creating the project so their
+		// CDN URLs can be embedded in firstMessage. The project-scoped upload
+		// endpoint requires a project to exist, so build uses the global
+		// endpoint (/api/upload-image) that stores under Tarobase's default
+		// upload app. This keeps the image references in the very first
+		// message the AI sees.
+		if len(filePaths) > 0 {
+			suffix, _, err := uploadAndPrepareFilesGlobal(ctx, filePaths)
+			if err != nil {
+				return err
+			}
+			message += suffix
+		}
 
 		// 1. Create project
 		if output.GetFormat() == output.FormatText {
@@ -149,4 +165,5 @@ func init() {
 	buildCmd.Flags().Bool("public", true, "Make project public")
 	buildCmd.Flags().Bool("stdin", false, "Read message from stdin")
 	buildCmd.Flags().String("mode", "full", "Generation mode: full, policy, ui,policy, backend,policy")
+	buildCmd.Flags().StringSlice("file", nil, "Image file(s) to attach (PNG, JPEG, GIF, WebP, max 3.4MB each)")
 }
