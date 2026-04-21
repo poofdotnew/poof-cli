@@ -41,6 +41,13 @@ make install
 
 Grab the latest release from [GitHub Releases](https://github.com/poofdotnew/poof-cli/releases) for your platform.
 
+**Update:**
+
+```bash
+poof update         # install the latest release
+poof update --check # check without installing
+```
+
 ## Quick Start
 
 ```bash
@@ -88,6 +95,7 @@ The CLI reads configuration from (highest priority first):
 | --------------------- | ------------ | ------------------------------------------------ |
 | `POOF_ENV`            | `production` | Environment: `production`, `staging`, or `local` |
 | `VERCEL_BYPASS_TOKEN` |              | Vercel protection bypass for staging             |
+| `POOF_NO_UPDATE_CHECK` |              | Set to `1` to disable automatic update checks    |
 
 ### Persistent Config
 
@@ -322,6 +330,8 @@ poof keygen                # generate a new Solana keypair
 poof config show           # show current configuration
 poof config set <key> <val>  # set a config value
 poof version               # show version, commit, build date
+poof update                # update poof to the latest release
+poof update --check        # check for updates without installing
 ```
 
 ### Shell Completion
@@ -343,6 +353,7 @@ These flags work with every command:
 | `--env <name>`       | Environment: `production`, `staging`, `local`      |
 | `--json`             | Output as JSON (for scripting)                     |
 | `--quiet`            | Minimal output (IDs and URLs only)                 |
+| `--no-update-check`  | Skip the automatic update check                    |
 
 ## Output Formats
 

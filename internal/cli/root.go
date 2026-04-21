@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,8 +13,10 @@ import (
 	"github.com/poofdotnew/poof-cli/internal/config"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/poofdotnew/poof-cli/internal/poll"
+	selfupdate "github.com/poofdotnew/poof-cli/internal/update"
 	"github.com/poofdotnew/poof-cli/internal/version"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -21,10 +24,11 @@ var (
 	apiClient *api.Client
 	authMgr   *auth.Manager
 
-	flagJSON    bool
-	flagQuiet   bool
-	flagEnv     string
-	flagProject string
+	flagJSON          bool
+	flagQuiet         bool
+	flagEnv           string
+	flagProject       string
+	flagNoUpdateCheck bool
 )
 
 // rootCmd is the top-level poof command.
@@ -56,6 +60,10 @@ var rootCmd = &cobra.Command{
 
 		return nil
 	},
+	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
+		maybeNotifyUpdate(cmd)
+		return nil
+	},
 }
 
 func init() {
@@ -63,6 +71,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagQuiet, "quiet", false, "Minimal output (IDs and URLs only)")
 	rootCmd.PersistentFlags().StringVar(&flagEnv, "env", "", "Environment: production, staging, local")
 	rootCmd.PersistentFlags().StringVarP(&flagProject, "project", "p", "", "Project ID")
+	rootCmd.PersistentFlags().BoolVar(&flagNoUpdateCheck, "no-update-check", false, "Skip the automatic update check")
 
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(projectCmd)
@@ -85,6 +94,7 @@ func init() {
 	rootCmd.AddCommand(keygenCmd)
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(browserCmd)
 }
 
@@ -184,6 +194,55 @@ func handleError(err error) error {
 		return fmt.Errorf("not found: %s", apiErr.Message)
 	}
 	return fmt.Errorf("%s", apiErr.Message)
+}
+
+func maybeNotifyUpdate(cmd *cobra.Command) {
+	if shouldSkipUpdateCheck(cmd) {
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	cachePath := filepath.Join(config.PoofDir(), "update_cache.json")
+	result, err := selfupdate.CheckWithCache(ctx, selfupdate.NewClient(), version.Version, cachePath, 24*time.Hour)
+	if err != nil || !result.UpdateAvailable {
+		return
+	}
+	if !selfupdate.NotificationDue(cachePath, result, 24*time.Hour) {
+		return
+	}
+
+	output.Warn("A new poof version is available: %s (current %s). Run 'poof update' to upgrade.", result.LatestVersion, result.CurrentVersion)
+	_ = selfupdate.MarkNotified(cachePath, result)
+}
+
+func shouldSkipUpdateCheck(cmd *cobra.Command) bool {
+	if flagNoUpdateCheck || output.GetFormat() != output.FormatText {
+		return true
+	}
+	if !term.IsTerminal(int(os.Stdout.Fd())) {
+		return true
+	}
+	if envDisablesUpdateCheck(os.Getenv("POOF_NO_UPDATE_CHECK")) {
+		return true
+	}
+	if cmd != nil {
+		path := cmd.CommandPath()
+		if path == "poof update" || strings.HasPrefix(path, "poof completion") {
+			return true
+		}
+	}
+	return false
+}
+
+func envDisablesUpdateCheck(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // pollAIUntilIdle polls the AI active endpoint until the AI finishes. It uses
