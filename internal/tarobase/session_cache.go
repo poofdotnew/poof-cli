@@ -100,7 +100,10 @@ func writeSessionCache(cache map[string]cachedSession) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(sessionCachePath(), data, 0o600)
+	// Atomic via temp+rename so a concurrent reader (another `poof data`
+	// invocation touching a different appId) can't observe a partial JSON.
+	// See config.WriteFileAtomic for the cross-process rationale.
+	return config.WriteFileAtomic(sessionCachePath(), data, 0o600)
 }
 
 // loadCachedSession returns the cached session for (appId, wallet) if one

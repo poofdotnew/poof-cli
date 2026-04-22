@@ -57,7 +57,11 @@ func SaveCachedTokens(session *Session, wallet, env string) error {
 		return err
 	}
 
-	return os.WriteFile(tokenCachePath(), data, 0600)
+	// Atomic via temp+rename so a concurrent reader can't observe a partial
+	// write. Two `poof iterate` invocations refreshing tokens at the same
+	// time is rare but possible; this prevents a torn JSON that would fail
+	// to parse and force both processes through a re-login.
+	return config.WriteFileAtomic(tokenCachePath(), data, 0o600)
 }
 
 // ClearCachedTokens removes the token cache.
