@@ -54,7 +54,7 @@ func (c *Client) buildAndSignMainnetTx(
 	}
 
 	// 2. Borsh-encode the instruction data.
-	insData, err := EncodeSetDocumentsArgs(anchorArgs)
+	insData, err := EncodeSetDocumentsArgs(&anchorArgs)
 	if err != nil {
 		return nil, fmt.Errorf("encode args: %w", err)
 	}

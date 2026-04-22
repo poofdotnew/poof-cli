@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -105,21 +106,21 @@ func TestResolveDataTarget_FlagConflicts(t *testing.T) {
 	flagDataAppID = "app123"
 	flagDataChain = "offchain"
 	flagDataEnv = "draft"
-	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--environment conflicts with --app-id") {
+	if _, err := resolveDataTarget(context.Background()); err == nil || !strings.Contains(err.Error(), "--environment conflicts with --app-id") {
 		t.Errorf("expected env-vs-appid conflict, got %v", err)
 	}
 
 	flagDataAppID = ""
 	flagDataChain = "mainnet"
 	flagDataEnv = ""
-	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--chain only applies with --app-id") {
+	if _, err := resolveDataTarget(context.Background()); err == nil || !strings.Contains(err.Error(), "--chain only applies with --app-id") {
 		t.Errorf("expected chain-without-appid error, got %v", err)
 	}
 
 	flagDataAppID = "app123"
 	flagDataChain = ""
 	flagDataEnv = ""
-	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--chain is required") {
+	if _, err := resolveDataTarget(context.Background()); err == nil || !strings.Contains(err.Error(), "--chain is required") {
 		t.Errorf("expected chain-required error when app-id set, got %v", err)
 	}
 }
@@ -133,7 +134,7 @@ func TestResolveDataTarget_SharedAppIDSuccess(t *testing.T) {
 	flagDataAppID = "shared-123"
 	flagDataChain = "mainnet"
 	flagDataEnv = ""
-	resolved, err := resolveDataTarget(nil)
+	resolved, err := resolveDataTarget(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}

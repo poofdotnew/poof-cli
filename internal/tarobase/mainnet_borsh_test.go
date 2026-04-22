@@ -14,7 +14,7 @@ import (
 // byte-level output for known inputs so regressions are caught pre-submit.
 
 func TestEncodeSetDocumentsArgs_DiscriminatorPrepended(t *testing.T) {
-	out, err := EncodeSetDocumentsArgs(AnchorSetDocuments{AppID: ""})
+	out, err := EncodeSetDocumentsArgs(&AnchorSetDocuments{AppID: ""})
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -31,7 +31,7 @@ func TestEncodeSetDocumentsArgs_EmptyArgsLayout(t *testing.T) {
 	//   delete_paths len u32=0 (4)     -> []
 	//   tx_data len u32=0 (4)          -> []
 	//   simulate u8=0 (1)              -> false
-	out, err := EncodeSetDocumentsArgs(AnchorSetDocuments{})
+	out, err := EncodeSetDocumentsArgs(&AnchorSetDocuments{})
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestEncodeSetDocumentsArgs_StringFieldValue(t *testing.T) {
 			}},
 		}},
 	}
-	out, err := EncodeSetDocumentsArgs(args)
+	out, err := EncodeSetDocumentsArgs(&args)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestEncodeSetDocumentsArgs_U64AndAddressFieldValues(t *testing.T) {
 			},
 		}},
 	}
-	out, err := EncodeSetDocumentsArgs(args)
+	out, err := EncodeSetDocumentsArgs(&args)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}

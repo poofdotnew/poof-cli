@@ -18,9 +18,7 @@ import (
 // Sessions are cached on-disk per (appId, wallet) in ~/.poof/tarobase-sessions.json
 // (see session_cache.go). A chain of `poof data` calls against the same app
 // reuses the cached session instead of redoing nonce+sign on every invocation,
-// which otherwise hammers auth.tarobase.com into a 429. On a 401 from the
-// data-plane API the Client calls refreshSession() to invalidate the bad
-// cache entry and re-issue.
+// which otherwise hammers auth.tarobase.com into a 429.
 func (c *Client) login(_ context.Context) error {
 	wallet := c.Keypair.Address
 	if cached, ok := loadCachedSession(c.AppID, wallet); ok {
@@ -51,13 +49,4 @@ func (c *Client) issueSession() error {
 	// eat the extra nonce+sign next time.
 	_ = saveSessionCacheEntry(c.AppID, c.Keypair.Address, session)
 	return nil
-}
-
-// refreshSession drops the cached session for this (appId, wallet) and
-// re-issues. Called by the HTTP layer on a 401 from the data plane so stale
-// cached tokens don't lock out a still-valid keypair.
-func (c *Client) refreshSession() error {
-	invalidateSessionCacheEntry(c.AppID, c.Keypair.Address)
-	c.session = nil
-	return c.issueSession()
 }

@@ -50,7 +50,7 @@ func dataClient(ctx context.Context) (*tarobase.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return tarobase.NewClient(ctx, tarobase.Config{
+	return tarobase.NewClient(ctx, &tarobase.Config{
 		AppID:      resolved.AppID,
 		Chain:      resolved.Chain,
 		PrivateKey: cfg.SolanaPrivateKey,

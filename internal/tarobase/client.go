@@ -84,8 +84,13 @@ type Config struct {
 }
 
 // NewClient constructs a Client and performs the nonce+sign session exchange
-// so subsequent Do calls carry a valid Bearer token.
-func NewClient(ctx context.Context, cfg Config) (*Client, error) {
+// so subsequent Do calls carry a valid Bearer token. cfg is taken by pointer
+// because the Config struct is big enough (88B) that passing by value trips
+// golangci's gocritic/hugeParam check.
+func NewClient(ctx context.Context, cfg *Config) (*Client, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("cfg is nil")
+	}
 	if cfg.AppID == "" {
 		return nil, fmt.Errorf("AppID is required")
 	}

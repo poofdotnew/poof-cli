@@ -48,7 +48,7 @@ func mockServer(t *testing.T, routes map[string]http.HandlerFunc) (*Client, func
 		http.Error(w, "unexpected path "+r.URL.Path, http.StatusNotFound)
 	}))
 
-	client, err := NewClient(context.Background(), Config{
+	client, err := NewClient(context.Background(), &Config{
 		AppID:      "test-app",
 		Chain:      ChainOffchain,
 		PrivateKey: fakeKey,

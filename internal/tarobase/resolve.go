@@ -30,8 +30,10 @@ func Resolve(ctx context.Context, poofAPI *api.Client, projectID string, env Env
 		return nil, fmt.Errorf("project %s has no connectionInfo — has it been built yet?", projectID)
 	}
 
-	var envInfo *api.ConnectionEnv
-	chain := ChainMainnet
+	var (
+		envInfo *api.ConnectionEnv
+		chain   Chain
+	)
 	switch env {
 	case EnvDraft:
 		envInfo, chain = status.ConnectionInfo.Draft, ChainOffchain

@@ -93,17 +93,6 @@ func saveSessionCacheEntry(appID, wallet string, session *auth.Session) error {
 	return writeSessionCache(cache)
 }
 
-// invalidateSessionCacheEntry drops one key. Called on 401 to force a fresh
-// login on the next attempt.
-func invalidateSessionCacheEntry(appID, wallet string) {
-	cache, err := loadSessionCache()
-	if err != nil {
-		return
-	}
-	delete(cache, sessionCacheKey(appID, wallet))
-	_ = writeSessionCache(cache)
-}
-
 func writeSessionCache(cache map[string]cachedSession) error {
 	cacheFileMu.Lock()
 	defer cacheFileMu.Unlock()

@@ -24,8 +24,13 @@ const tarobaseProgramID = "poof4b5pk1L9tmThvBmaABjcyjfhFGbMbQP5BXk2QZp"
 // EncodeSetDocumentsArgs borsh-encodes the Anchor `set_documents` args in
 // the canonical order (app_id, documents, delete_paths, tx_data, simulate)
 // and prepends the discriminator. The returned bytes are the instruction
-// `data` field ready to hand to solana-go.
-func EncodeSetDocumentsArgs(args AnchorSetDocuments) ([]byte, error) {
+// `data` field ready to hand to solana-go. args is taken by pointer because
+// AnchorSetDocuments is big enough (96B) that passing by value trips
+// golangci's gocritic/hugeParam check.
+func EncodeSetDocumentsArgs(args *AnchorSetDocuments) ([]byte, error) {
+	if args == nil {
+		return nil, fmt.Errorf("args is nil")
+	}
 	// gagliardetto/binary's NewBorshEncoder handles most of this, but
 	// FieldValue is a complex enum we have to drive manually (the library's
 	// complex-enum encoder requires the enum as a struct-with-tag, which
