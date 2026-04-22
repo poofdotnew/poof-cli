@@ -233,6 +233,36 @@ poof files update -p <id> --file src/config.ts --content "export const X = 1;"
 poof files update -p <id> --from-json files.json          # bulk update from JSON
 ```
 
+### Data (runtime reads/writes)
+
+Talk to a project's Tarobase data plane from the CLI — single writes, atomic `setMany` bundles, reads, and policy queries. Defaults to the `draft` (Poofnet) environment; use `-e preview` for mainnet preview or `-e production` for mainnet production. The CLI signs + submits offchain transactions for draft and real Solana versioned transactions for mainnet (via Helius); no separate SDK setup needed.
+
+```bash
+# Queries
+poof data query -p <id> --name getSolPriceInUSD
+poof data query -p <id> --name getSolBalance --args '{"address":"<addr>"}'
+
+# Single-doc writes + reads
+poof data set -p <id> --path "memories/<addr>" --data '{"content":"hi"}'
+poof data get -p <id> --path "memories/<addr>"
+
+# Atomic setMany bundle (any rule/hook failure rolls back the whole bundle)
+cat > bundle.json <<'EOF'
+[
+  {"path":"user/<addr>/TimeWindow/g1","document":{"startTime":0,"endTime":4102444800}},
+  {"path":"user/<addr>/BalanceCheck/g1","document":{"mint":"<mint>","op":"gte","threshold":0}}
+]
+EOF
+poof data set-many -p <id> --from-json bundle.json
+
+# Mainnet preview — signs + submits a real Solana tx via Helius
+poof data set -p <id> -e preview \
+    --path "user/<addr>/TokenTransfer/tt-1" \
+    --data '{"source":"<addr>","destination":"<addr>","mint":"<usdc>","amount":1}'
+```
+
+Override the Solana mainnet RPC with `POOF_SOLANA_MAINNET_RPC` if you're routing through your own node. See `docs/set-many.md` for composition patterns and failure semantics.
+
 ### Deployment
 
 ```bash
