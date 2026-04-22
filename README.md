@@ -145,7 +145,7 @@ poof iterate -p <id> -m "Fix the login button styling"
 
 Sends a chat message, waits for the AI to finish, and shows test results if any exist.
 
-If `poof task test-results -p <id> --json` comes back with `summary.total = 0`, inspect `poof task list -p <id> --json`, `poof chat active -p <id> --json`, `poof logs -p <id>`, and `poof project messages -p <id> --limit 100 --json` before assuming the run is healthy. `task list` shows checkpoints/tasks, but test-tool activity may only be visible in project messages until structured execution records land. When `chat active` stays `true` but there are no new task ids or recent logs, clear the stale state with `poof chat cancel -p <id>` and do one targeted retry instead of stacking generic `iterate` calls. If the task list still only shows bootstrap/constants work and that targeted retry also returns an empty summary, treat the run as a Poof execution incident, capture `poof project status` plus smoke evidence, and stop retrying blindly.
+If `poof task test-results -p <id> --json` comes back with `summary.total = 0`, inspect `poof task list -p <id> --json`, `poof chat active -p <id> --json`, `poof logs -p <id>`, and `poof project messages -p <id> --limit 100 --json` before assuming the run is healthy. `task list` shows checkpoints/tasks, but test-tool activity may only be visible in project messages until structured execution records land. When `chat active` stays `true` but there are no new task ids or recent logs, clear the stale state with `poof chat cancel -p <id>` and do one targeted retry instead of stacking generic `iterate` calls. If the AI keeps resuming a broken Claude Code context after cancellation or a targeted retry, run `poof chat clear -p <id>` to drop the saved session ID before the next retry. If the task list still only shows bootstrap/constants work and that targeted retry also returns an empty summary, treat the run as a Poof execution incident, capture `poof project status` plus smoke evidence, and stop retrying blindly.
 
 #### `poof verify` — Run the canonical post-build verification flow
 
@@ -218,6 +218,7 @@ poof chat send -p <id> -m "Add a settings page"   # send a message
 poof chat active -p <id>                           # check if AI is running, queued, or idle
 poof chat steer -p <id> -m "Focus on backend"      # redirect mid-build
 poof chat cancel -p <id>                           # cancel current build
+poof chat clear -p <id>                            # clear saved AI session context
 ```
 
 ### Files

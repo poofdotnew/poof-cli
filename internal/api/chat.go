@@ -22,6 +22,21 @@ type ChatResponse struct {
 
 func (r *ChatResponse) QuietString() string { return r.MessageID }
 
+type ClearSessionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+func (r *ClearSessionResponse) QuietString() string {
+	if r.Message != "" {
+		return r.Message
+	}
+	if r.Success {
+		return "session cleared"
+	}
+	return ""
+}
+
 type AIActiveResponse struct {
 	Active bool   `json:"active"`
 	State  string `json:"state,omitempty"`
@@ -87,6 +102,20 @@ func (c *Client) CancelAI(ctx context.Context, projectID string) error {
 	path := fmt.Sprintf("/api/project/%s/cancel", projectID)
 	_, err := c.Do(ctx, "POST", path, nil)
 	return err
+}
+
+func (c *Client) ClearAISession(ctx context.Context, projectID string) (*ClearSessionResponse, error) {
+	path := fmt.Sprintf("/api/project/%s/session/clear", projectID)
+	body, err := c.Do(ctx, "POST", path, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp ClearSessionResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return &resp, nil
 }
 
 func (c *Client) SteerAI(ctx context.Context, projectID, message, messageID string) error {

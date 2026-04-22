@@ -80,6 +80,34 @@ func TestCancelAI_Success(t *testing.T) {
 	}
 }
 
+func TestClearAISession_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/project/proj-1/session/clear" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(ClearSessionResponse{
+			Success: true,
+			Message: "Session cleared successfully",
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.ClearAISession(context.Background(), "proj-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Success {
+		t.Error("expected Success=true")
+	}
+	if resp.Message != "Session cleared successfully" {
+		t.Errorf("expected clear message, got %q", resp.Message)
+	}
+}
+
 func TestSteerAI_Success(t *testing.T) {
 	var receivedBody map[string]string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -206,6 +206,37 @@ var chatCancelCmd = &cobra.Command{
 	},
 }
 
+var chatClearCmd = &cobra.Command{
+	Use:   "clear",
+	Short: "Clear saved AI session context",
+	Example: `  poof chat clear -p <id>
+  poof chat clear -p <id> --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireAuth(); err != nil {
+			return err
+		}
+
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		resp, err := apiClient.ClearAISession(context.Background(), projectID)
+		if err != nil {
+			return handleError(err)
+		}
+
+		output.Print(resp, func() {
+			if resp.Message != "" {
+				output.Success(resp.Message)
+				return
+			}
+			output.Success("Session cleared.")
+		})
+		return nil
+	},
+}
+
 var chatSteerCmd = &cobra.Command{
 	Use:   "steer",
 	Short: "Redirect AI mid-execution without canceling",
@@ -252,5 +283,6 @@ func init() {
 	chatCmd.AddCommand(chatSendCmd)
 	chatCmd.AddCommand(chatActiveCmd)
 	chatCmd.AddCommand(chatCancelCmd)
+	chatCmd.AddCommand(chatClearCmd)
 	chatCmd.AddCommand(chatSteerCmd)
 }
