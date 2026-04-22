@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/poofdotnew/poof-cli/internal/api"
 	"github.com/poofdotnew/poof-cli/internal/output"
 	"github.com/poofdotnew/poof-cli/internal/tarobase"
 	"github.com/spf13/cobra"
@@ -26,26 +27,26 @@ var dataCmd = &cobra.Command{
 	Long: `Work with your project's runtime data — reads, writes, policy queries,
 and atomic setMany bundles — without dropping to raw REST.
 
-All ` + "`poof data`" + ` subcommands accept -p <project-id> and -e/--environment
-(draft default, or preview/production). They resolve the right tarobase appId
-from the project's connectionInfo and sign a session scoped to that appId.`,
+Two targeting modes:
+  - Project-based (default): -p <project-id> + -e draft|preview|production.
+    Looks up the right appId from the project's connectionInfo. Requires
+    that you own (or have access to) the project.
+  - Shared-appid: --app-id <id> + --chain offchain|mainnet. Talks to a
+    Tarobase appid directly — e.g. someone else's deployed primitives
+    library. Skips the project lookup; auth is still your own wallet.`,
 }
 
-var flagDataEnv string
+var (
+	flagDataEnv   string
+	flagDataAppID string
+	flagDataChain string
+)
 
 func dataClient(ctx context.Context) (*tarobase.Client, error) {
 	if err := requireAuth(); err != nil {
 		return nil, err
 	}
-	projectID, err := getProjectID()
-	if err != nil {
-		return nil, err
-	}
-	env, err := tarobase.ParseEnvironment(flagDataEnv)
-	if err != nil {
-		return nil, err
-	}
-	resolved, err := tarobase.Resolve(ctx, apiClient, projectID, env)
+	resolved, err := resolveDataTarget(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +57,57 @@ func dataClient(ctx context.Context) (*tarobase.Client, error) {
 		APIURL:     resolved.APIURL,
 		AuthURL:    resolved.AuthURL,
 	})
+}
+
+// resolveDataTarget picks between shared-appid mode (--app-id/--chain,
+// pointing directly at a Tarobase appid someone else has deployed) and
+// project-based mode (-p/-e, looking up the appId from connectionInfo).
+// Enforces that the two modes don't mix — --environment is project-scoped
+// and --chain is appid-scoped.
+func resolveDataTarget(ctx context.Context) (*tarobase.ResolvedEnv, error) {
+	if flagDataAppID != "" {
+		if flagDataEnv != "" {
+			return nil, fmt.Errorf("--environment conflicts with --app-id (environment is a project-based concept; --app-id points at a specific Tarobase appid). Pick one.")
+		}
+		chain, err := parseChainFlag(flagDataChain)
+		if err != nil {
+			return nil, err
+		}
+		return &tarobase.ResolvedEnv{
+			AppID:   flagDataAppID,
+			Chain:   chain,
+			APIURL:  "https://api.tarobase.com",
+			AuthURL: "https://auth.tarobase.com",
+		}, nil
+	}
+	if flagDataChain != "" {
+		return nil, fmt.Errorf("--chain only applies with --app-id. Drop --chain and use -e draft|preview|production for project-based mode.")
+	}
+	projectID, err := getProjectID()
+	if err != nil {
+		return nil, err
+	}
+	env, err := tarobase.ParseEnvironment(flagDataEnv)
+	if err != nil {
+		return nil, err
+	}
+	return tarobase.Resolve(ctx, apiClient, projectID, env)
+}
+
+// parseChainFlag maps the user-facing --chain value to the internal Chain
+// constant. Accepts `mainnet` as a shorthand for `solana_mainnet` since
+// nothing else routes through the mainnet path today.
+func parseChainFlag(s string) (tarobase.Chain, error) {
+	switch s {
+	case "":
+		return "", fmt.Errorf("--chain is required when --app-id is set (offchain | mainnet)")
+	case "offchain":
+		return tarobase.ChainOffchain, nil
+	case "mainnet", "solana_mainnet":
+		return tarobase.ChainMainnet, nil
+	default:
+		return "", fmt.Errorf("invalid --chain %q (valid: offchain, mainnet)", s)
+	}
 }
 
 // ---- data set ----------------------------------------------------------------
@@ -297,6 +349,73 @@ look in, e.g. --path user/<addr>/BalanceCheck/any --name simulate.`,
 	},
 }
 
+// ---- data app-ids ------------------------------------------------------------
+
+var dataAppIDsCmd = &cobra.Command{
+	Use:   "app-ids",
+	Short: "Show a project's Tarobase appIds per environment",
+	Long: `List the Tarobase appIds provisioned for a project — one per environment
+(draft, preview, production).
+
+Background: a Poof project ID (what you pass to most CLI commands via -p)
+is your handle on the project — it owns builds, deploys, and settings. A
+Tarobase appId is the data-plane address of a specific deployed policy
+instance: each environment of a project gets its own appId, so the draft
+(off-chain / Poofnet) and real mainnet instances stay cleanly separated.
+
+Use appIds with ` + "`poof data --app-id <id> --chain offchain|mainnet`" + ` to
+talk to a specific appId directly — useful when pointing at a shared
+primitives library someone else has deployed, without needing Poof-project
+access to it.`,
+	Example: `  poof data app-ids -p <project-id>
+  poof data app-ids -p <project-id> --json`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		if err := requireAuth(); err != nil {
+			return err
+		}
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+		status, err := apiClient.GetProjectStatus(ctx, projectID)
+		if err != nil {
+			return handleError(err)
+		}
+		ci := status.ConnectionInfo
+		if ci == nil {
+			return fmt.Errorf("project %s has no connectionInfo — has it been built yet?", projectID)
+		}
+		type envRow struct {
+			Env   string `json:"env"`
+			AppID string `json:"appId"`
+			Chain string `json:"chain"`
+		}
+		mk := func(env, chain string, c *api.ConnectionEnv) envRow {
+			if c == nil || c.TarobaseAppId == "" {
+				return envRow{Env: env}
+			}
+			return envRow{Env: env, AppID: c.TarobaseAppId, Chain: chain}
+		}
+		rows := []envRow{
+			mk("draft", "offchain", ci.Draft),
+			mk("preview", "mainnet", ci.Preview),
+			mk("production", "mainnet", ci.Production),
+		}
+		output.Print(map[string]any{"projectId": projectID, "envs": rows}, func() {
+			output.Info("project %s", projectID)
+			for _, r := range rows {
+				if r.AppID == "" {
+					output.Info("  %-10s (not provisioned)", r.Env)
+					continue
+				}
+				output.Info("  %-10s appId=%s chain=%s", r.Env, r.AppID, r.Chain)
+			}
+		})
+		return nil
+	},
+}
+
 func emitRaw(raw json.RawMessage) error {
 	output.Print(json.RawMessage(raw), func() {
 		fmt.Println(string(raw))
@@ -313,7 +432,9 @@ func mustMarshal(v any) []byte {
 }
 
 func init() {
-	dataCmd.PersistentFlags().StringVarP(&flagDataEnv, "environment", "e", "", "Target environment: draft (default), preview, production")
+	dataCmd.PersistentFlags().StringVarP(&flagDataEnv, "environment", "e", "", "Project-based mode: target environment — draft (default), preview, production. Ignored when --app-id is set.")
+	dataCmd.PersistentFlags().StringVar(&flagDataAppID, "app-id", "", "Shared-appid mode: talk directly to a Tarobase appid (e.g. a shared primitives library someone else deployed). Requires --chain; skips -p and -e.")
+	dataCmd.PersistentFlags().StringVar(&flagDataChain, "chain", "", "Chain for --app-id: offchain | mainnet")
 
 	dataSetCmd.Flags().String("path", "", "Tarobase path (e.g. memories/<addr>)")
 	dataSetCmd.Flags().String("data", "", "JSON document body")
@@ -341,4 +462,5 @@ func init() {
 	dataCmd.AddCommand(dataGetCmd)
 	dataCmd.AddCommand(dataGetManyCmd)
 	dataCmd.AddCommand(dataQueryCmd)
+	dataCmd.AddCommand(dataAppIDsCmd)
 }

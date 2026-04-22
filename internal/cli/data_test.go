@@ -3,6 +3,8 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	"github.com/poofdotnew/poof-cli/internal/tarobase"
 )
 
 func TestParseSetManyPayload_AcceptsBareArray(t *testing.T) {
@@ -57,5 +59,91 @@ func TestParseSetManyPayload_RequiresPathOnEachEntry(t *testing.T) {
 	_, err := parseSetManyPayload(input)
 	if err == nil || !strings.Contains(err.Error(), "path is required") {
 		t.Errorf("expected path-required error, got %v", err)
+	}
+}
+
+func TestParseChainFlag(t *testing.T) {
+	cases := []struct {
+		in   string
+		want tarobase.Chain
+		err  bool
+	}{
+		{"offchain", tarobase.ChainOffchain, false},
+		{"mainnet", tarobase.ChainMainnet, false},
+		{"solana_mainnet", tarobase.ChainMainnet, false},
+		{"", "", true},
+		{"devnet", "", true},
+		{"MAINNET", "", true}, // case-sensitive by design
+	}
+	for _, c := range cases {
+		got, err := parseChainFlag(c.in)
+		if c.err {
+			if err == nil {
+				t.Errorf("parseChainFlag(%q): want err, got %q", c.in, got)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("parseChainFlag(%q): unexpected err %v", c.in, err)
+		}
+		if got != c.want {
+			t.Errorf("parseChainFlag(%q): got %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+// resolveDataTarget's happy paths hit network (Resolve) or config, but the
+// flag-combination errors are pure — verify the appid/env and chain/no-appid
+// conflict rules fire before any outbound call.
+func TestResolveDataTarget_FlagConflicts(t *testing.T) {
+	t.Cleanup(func() {
+		flagDataAppID = ""
+		flagDataChain = ""
+		flagDataEnv = ""
+	})
+
+	flagDataAppID = "app123"
+	flagDataChain = "offchain"
+	flagDataEnv = "draft"
+	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--environment conflicts with --app-id") {
+		t.Errorf("expected env-vs-appid conflict, got %v", err)
+	}
+
+	flagDataAppID = ""
+	flagDataChain = "mainnet"
+	flagDataEnv = ""
+	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--chain only applies with --app-id") {
+		t.Errorf("expected chain-without-appid error, got %v", err)
+	}
+
+	flagDataAppID = "app123"
+	flagDataChain = ""
+	flagDataEnv = ""
+	if _, err := resolveDataTarget(nil); err == nil || !strings.Contains(err.Error(), "--chain is required") {
+		t.Errorf("expected chain-required error when app-id set, got %v", err)
+	}
+}
+
+func TestResolveDataTarget_SharedAppIDSuccess(t *testing.T) {
+	t.Cleanup(func() {
+		flagDataAppID = ""
+		flagDataChain = ""
+		flagDataEnv = ""
+	})
+	flagDataAppID = "shared-123"
+	flagDataChain = "mainnet"
+	flagDataEnv = ""
+	resolved, err := resolveDataTarget(nil)
+	if err != nil {
+		t.Fatalf("unexpected err: %v", err)
+	}
+	if resolved.AppID != "shared-123" {
+		t.Errorf("appid: got %q", resolved.AppID)
+	}
+	if resolved.Chain != tarobase.ChainMainnet {
+		t.Errorf("chain: got %q", resolved.Chain)
+	}
+	if resolved.APIURL == "" || resolved.AuthURL == "" {
+		t.Errorf("expected default API/Auth URLs populated, got %q / %q", resolved.APIURL, resolved.AuthURL)
 	}
 }
