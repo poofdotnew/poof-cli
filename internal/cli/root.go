@@ -96,6 +96,7 @@ func init() {
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(updateCmd)
 	rootCmd.AddCommand(browserCmd)
+	rootCmd.AddCommand(dataCmd)
 }
 
 // Execute runs the root command.

@@ -233,6 +233,53 @@ poof files update -p <id> --file src/config.ts --content "export const X = 1;"
 poof files update -p <id> --from-json files.json          # bulk update from JSON
 ```
 
+### Data (runtime reads/writes)
+
+Talk to a project's Tarobase data plane from the CLI — single writes, atomic `setMany` bundles, reads, and policy queries. The CLI signs + submits offchain transactions for draft and real Solana versioned transactions for mainnet (via Helius); no separate SDK setup needed.
+
+**Project ID vs appId.** A Poof *project ID* (`-p <id>`) is your handle on a project — it owns builds, deploys, settings. A Tarobase *appId* is the data-plane address of a specific deployed policy instance. **Each project has multiple appIds — one per environment** (draft = off-chain / Poofnet, preview and production = real Solana mainnet), so the instances stay cleanly separated. Most commands take `-p` and auto-resolve the right appId from the project's connectionInfo. You can skip that with `--app-id <id> --chain offchain|mainnet` to talk to an appId directly — useful when pointing at a *shared primitives library* someone else has deployed (no Poof-project access needed; auth is still your own wallet). List a project's appIds per env with `poof data app-ids -p <id>`.
+
+```bash
+# List a project's appIds per env
+poof data app-ids -p <id>
+# → project <id>
+#     draft      appId=... chain=offchain
+#     preview    appId=... chain=mainnet
+#     production appId=... chain=mainnet
+
+# Queries (project-based, -e defaults to draft)
+poof data query -p <id> --name getSolPriceInUSD
+poof data query -p <id> --name getSolBalance --args '{"address":"<addr>"}'
+
+# Same query via shared-appid mode (point at someone else's deployed policy)
+poof data query --app-id <appId> --chain offchain --name getSolPriceInUSD
+
+# Single-doc writes + reads
+poof data set -p <id> --path "memories/<addr>" --data '{"content":"hi"}'
+poof data get -p <id> --path "memories/<addr>"
+
+# Atomic setMany bundle (any rule/hook failure rolls back the whole bundle)
+cat > bundle.json <<'EOF'
+[
+  {"path":"user/<addr>/TimeWindow/g1","document":{"startTime":0,"endTime":4102444800}},
+  {"path":"user/<addr>/BalanceCheck/g1","document":{"mint":"<mint>","op":"gte","threshold":0}}
+]
+EOF
+poof data set-many -p <id> --from-json bundle.json
+
+# Mainnet preview via project lookup
+poof data set -p <id> -e preview \
+    --path "user/<addr>/TokenTransfer/tt-1" \
+    --data '{"source":"<addr>","destination":"<addr>","mint":"<usdc>","amount":1}'
+
+# Same write against a shared-appid mainnet instance (no project access needed)
+poof data set --app-id <appId> --chain mainnet \
+    --path "user/<addr>/TokenTransfer/tt-1" \
+    --data '{"source":"<addr>","destination":"<addr>","mint":"<usdc>","amount":1}'
+```
+
+Override the Solana mainnet RPC with `POOF_SOLANA_MAINNET_RPC` if you're routing through your own node. See `docs/set-many.md` for composition patterns and failure semantics.
+
 ### Deployment
 
 ```bash
