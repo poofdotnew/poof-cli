@@ -213,6 +213,8 @@ var deployStaticCmd = &cobra.Command{
 	Use:   "static",
 	Short: "Deploy a pre-built static frontend",
 	Example: `  poof deploy static -p <id> --archive dist.tar.gz
+  poof deploy static -p <id> --archive dist.tar.gz --targets draft,preview
+  poof deploy static -p <id> --archive dist.tar.gz --targets all --yes
   poof deploy static -p <id> --archive dist.tar.gz --title "v2.0 release"
   poof deploy static -p <id> --archive dist.tar.gz --dry-run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -233,6 +235,28 @@ var deployStaticCmd = &cobra.Command{
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		title, _ := cmd.Flags().GetString("title")
 		description, _ := cmd.Flags().GetString("description")
+		targetsRaw, _ := cmd.Flags().GetString("targets")
+		yes, _ := cmd.Flags().GetBool("yes")
+
+		targets, err := parseStaticTargets(targetsRaw)
+		if err != nil {
+			return err
+		}
+
+		includesProduction := false
+		for _, t := range targets {
+			if t == "production" {
+				includesProduction = true
+				break
+			}
+		}
+		if includesProduction && !yes {
+			targetsDisplay := "production"
+			if len(targets) > 1 {
+				targetsDisplay = strings.Join(targets, ",")
+			}
+			return fmt.Errorf("deploying to production requires --yes to confirm\n  poof deploy static -p %s --archive %s --targets %s --yes", projectID, archivePath, targetsDisplay)
+		}
 
 		// Read and validate the archive
 		archive, err := os.ReadFile(archivePath)
@@ -245,43 +269,110 @@ var deployStaticCmd = &cobra.Command{
 		}
 
 		if dryRun {
-			output.Info("Would deploy static frontend from %s (%d bytes) to project %s. No changes made.", archivePath, len(archive), projectID)
+			output.Info("Would deploy static frontend from %s (%d bytes) to project %s (targets=%s). No changes made.", archivePath, len(archive), projectID, strings.Join(targets, ","))
 			return nil
 		}
 
 		ctx := context.Background()
-		resp, err := apiClient.DeployStatic(ctx, projectID, archive, title, description)
+		resp, err := apiClient.DeployStatic(ctx, projectID, archive, title, description, targets, includesProduction)
 		if err != nil {
 			return handleError(err)
 		}
 
-		// Match existing deploy pattern: get URLs after deploy
+		partial := len(resp.FailedTiers) > 0
 		status, sErr := apiClient.GetProjectStatus(ctx, projectID)
-		if sErr == nil {
-			output.Print(map[string]interface{}{
-				"target":    "static",
-				"projectId": projectID,
-				"taskId":    resp.TaskID,
-				"bundleUrl": resp.BundleURL,
-				"urls":      status.URLs,
-			}, func() {
-				output.Success("Static frontend deployed.")
+		printer := func() {
+			if partial {
+				output.Info("Static deploy partial: ok=%s failed=%s", strings.Join(resp.DeployedTiers, ","), strings.Join(resp.FailedTiers, ","))
+			} else {
+				output.Success("Static frontend deployed to %s.", strings.Join(resp.DeployedTiers, ","))
+			}
+			for _, t := range resp.Targets {
+				if t.OK {
+					if t.BundleURL != "" {
+						output.Info("  %s: %s", t.Target, t.BundleURL)
+					} else {
+						output.Info("  %s: ok", t.Target)
+					}
+				} else {
+					output.Info("  %s: FAILED — %s", t.Target, t.Error)
+				}
+			}
+			if sErr == nil {
 				for name, url := range status.URLs {
 					if url != "" {
-						output.Info("  %s: %s", name, url)
+						output.Info("  project %s: %s", name, url)
 					}
 				}
-			})
-		} else {
-			output.Print(resp, func() {
-				output.Success("Static frontend deployed.")
-				if resp.BundleURL != "" {
-					output.Info("  URL: %s", resp.BundleURL)
-				}
-			})
+			}
+		}
+
+		payload := map[string]interface{}{
+			"target":         "static",
+			"projectId":      projectID,
+			"taskId":         resp.TaskID,
+			"bundleUrl":      resp.BundleURL,
+			"targets":        resp.Targets,
+			"deployedTiers":  resp.DeployedTiers,
+			"failedTiers":    resp.FailedTiers,
+			"partialSuccess": partial,
+		}
+		if sErr == nil {
+			payload["urls"] = status.URLs
+		}
+		output.Print(payload, printer)
+
+		if partial {
+			return fmt.Errorf("partial deploy: failed tiers = %s", strings.Join(resp.FailedTiers, ","))
 		}
 		return nil
 	},
+}
+
+// parseStaticTargets parses the --targets flag. Allowed forms:
+//
+//	"" → []string{"draft"} (default, backward compatible)
+//	"all" → ["draft", "preview", "production"]
+//	"draft,preview" → ["draft", "preview"]
+//
+// Order is normalized to draft < preview < production and duplicates are
+// removed.
+func parseStaticTargets(raw string) ([]string, error) {
+	if raw == "" {
+		return []string{"draft"}, nil
+	}
+	if strings.ToLower(strings.TrimSpace(raw)) == "all" {
+		return []string{"draft", "preview", "production"}, nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, part := range strings.Split(raw, ",") {
+		name := strings.ToLower(strings.TrimSpace(part))
+		if name == "" {
+			continue
+		}
+		if name == "prod" {
+			name = "production"
+		}
+		if name != "draft" && name != "preview" && name != "production" {
+			return nil, fmt.Errorf("unknown target %q in --targets (allowed: draft, preview, production, all)", part)
+		}
+		if !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("--targets is empty after parsing %q", raw)
+	}
+	// Stable, deterministic order.
+	ordered := make([]string, 0, 3)
+	for _, name := range []string{"draft", "preview", "production"} {
+		if seen[name] {
+			ordered = append(ordered, name)
+		}
+	}
+	return ordered, nil
 }
 
 var deployDownloadCmd = &cobra.Command{
@@ -411,6 +502,8 @@ func init() {
 	deployStaticCmd.Flags().String("title", "", "Checkpoint title")
 	deployStaticCmd.Flags().String("description", "", "Checkpoint description")
 	deployStaticCmd.Flags().Bool("dry-run", false, "Validate without deploying")
+	deployStaticCmd.Flags().String("targets", "", "Comma-separated deploy targets (draft, preview, production) or \"all\". Defaults to draft.")
+	deployStaticCmd.Flags().Bool("yes", false, "Required confirmation when --targets includes production")
 
 	deployCmd.AddCommand(deployCheckCmd)
 	deployCmd.AddCommand(deployPreviewCmd)
