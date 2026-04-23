@@ -103,32 +103,20 @@ type DownloadURLResponse struct {
 
 func (r *DownloadURLResponse) QuietString() string { return r.URL }
 
-// StaticDeployTargetOutcome is per-tier status from the multi-target fan-out.
-type StaticDeployTargetOutcome struct {
-	Target    string `json:"target"`
-	OK        bool   `json:"ok"`
-	BundleURL string `json:"bundleUrl,omitempty"`
-	Error     string `json:"error,omitempty"`
-}
-
 // StaticDeployResponse is the response from deploy-static.
 type StaticDeployResponse struct {
-	ProjectID     string                      `json:"projectId"`
-	TaskID        string                      `json:"taskId"`
-	BundleURL     string                      `json:"bundleUrl,omitempty"`
-	Slug          string                      `json:"slug"`
-	Targets       []StaticDeployTargetOutcome `json:"targets,omitempty"`
-	DeployedTiers []string                    `json:"deployedTiers,omitempty"`
-	FailedTiers   []string                    `json:"failedTiers,omitempty"`
+	ProjectID string `json:"projectId"`
+	TaskID    string `json:"taskId"`
+	BundleURL string `json:"bundleUrl,omitempty"`
+	Slug      string `json:"slug"`
 }
 
 func (r *StaticDeployResponse) QuietString() string { return r.BundleURL }
 
 type staticDeployEnvelope struct {
-	Success        bool                 `json:"success"`
-	PartialSuccess bool                 `json:"partialSuccess"`
-	Data           StaticDeployResponse `json:"data"`
-	Error          string               `json:"error,omitempty"`
+	Success bool                 `json:"success"`
+	Data    StaticDeployResponse `json:"data"`
+	Error   string               `json:"error,omitempty"`
 }
 
 type uploadURLEnvelope struct {
@@ -142,22 +130,11 @@ type uploadURLEnvelope struct {
 	Error string `json:"error,omitempty"`
 }
 
-// DeployStatic uploads a pre-built static frontend (tar.gz) to a project and
-// fans it out across one or more deployment tiers (draft/preview/production).
-// Uses a 3-step presigned URL flow:
-//  1. Get a presigned S3 upload URL from the API
-//  2. Upload the archive directly to S3
-//  3. Trigger the deploy pipeline (single upload, server-side fan-out)
-//
-// When targets is empty the server defaults to ["draft"] for backward
-// compatibility. Any request that includes "production" in targets must set
-// confirmed=true; the CLI should require --yes from the user for that path.
-//
-// The returned StaticDeployResponse carries per-tier outcomes; the caller is
-// responsible for surfacing partial-success cases to the user. This function
-// treats "all targets failed" as an error; partial success returns without an
-// error but with FailedTiers populated.
-func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []byte, title, description string, targets []string, confirmed bool) (*StaticDeployResponse, error) {
+// DeployStatic uploads a pre-built static frontend (tar.gz) to a project's
+// draft tier. Uses a 3-step presigned URL flow: get a presigned S3 upload URL,
+// upload the archive, trigger the deploy. Preview/production tiers go through
+// `poof deploy preview` / `poof deploy production`.
+func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []byte, title, description string) (*StaticDeployResponse, error) {
 	// Step 1: Get presigned upload URL
 	uploadURLPath := fmt.Sprintf("/api/project/%s/deploy-static/upload-url", projectID)
 	uploadReqBody := map[string]string{}
@@ -208,36 +185,21 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 		return nil, fmt.Errorf("S3 upload failed (HTTP %d): %s", s3Resp.StatusCode, string(s3ErrBody))
 	}
 
-	// Step 3: Trigger the deploy (single upload, server-side fan-out across targets)
+	// Step 3: Trigger the deploy
 	triggerPath := fmt.Sprintf("/api/project/%s/deploy-static/trigger", projectID)
-	triggerBody := map[string]interface{}{"taskId": uploadURLResp.Data.TaskID}
-	if len(targets) > 0 {
-		triggerBody["targets"] = targets
-	}
-	if confirmed {
-		triggerBody["confirmed"] = true
-	}
+	triggerBody := map[string]string{"taskId": uploadURLResp.Data.TaskID}
 
-	// Use DoRaw so we can read the envelope on partial failures (HTTP 207)
-	// and hard failures (HTTP 502) alike. The server puts per-tier outcomes
-	// in the body regardless; the CLI needs to surface them.
-	triggerRespBody, statusCode, err := c.DoRaw(ctx, "POST", triggerPath, triggerBody, nil)
+	triggerRespBody, err := c.Do(ctx, "POST", triggerPath, triggerBody)
 	if err != nil {
 		return nil, fmt.Errorf("deploy trigger failed: %w", err)
 	}
 
 	var envelope staticDeployEnvelope
-	if jerr := json.Unmarshal(triggerRespBody, &envelope); jerr != nil {
-		if statusCode >= 400 {
-			return nil, parseAPIError(triggerRespBody, statusCode)
-		}
-		return nil, fmt.Errorf("failed to parse deploy response: %w", jerr)
+	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
 	}
-	if !envelope.Success && !envelope.PartialSuccess {
+	if !envelope.Success {
 		msg := envelope.Error
-		if msg == "" && statusCode >= 400 {
-			return nil, parseAPIError(triggerRespBody, statusCode)
-		}
 		if msg == "" {
 			msg = "deploy trigger returned success=false"
 		}

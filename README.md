@@ -288,9 +288,7 @@ poof deploy check -p <id>                          # check publish eligibility
 poof deploy preview -p <id>                        # deploy to mainnet preview
 poof deploy production -p <id> --yes               # deploy to production
 poof deploy mobile -p <id> --platform ios --app-name "My App" --app-icon-url https://...
-poof deploy static -p <id> --archive dist.tar.gz                                # draft (default)
-poof deploy static -p <id> --archive dist.tar.gz --targets draft,preview        # draft + mainnet-preview
-poof deploy static -p <id> --archive dist.tar.gz --targets all --yes            # all three tiers, single upload
+poof deploy static -p <id> --archive dist.tar.gz   # draft only (mainnet-preview/production via `poof deploy preview` / `poof deploy production`)
 poof deploy download -p <id>           # start code export
 poof deploy download-url -p <id> --task <taskId>   # get download link
 ```
