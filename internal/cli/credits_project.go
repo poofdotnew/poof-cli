@@ -44,32 +44,32 @@ var creditsProjectStatusCmd = &cobra.Command{
 		}
 
 		output.Print(resp, func() {
-			output.Info("Project credit bank — %s", projectID)
+			output.Info("Project funding — %s", projectID)
 
 			usage := bucketTotal(resp.Usage.Withdrawable, resp.Usage.NonWithdrawable)
 			chat := bucketTotal(resp.Chat.Withdrawable, resp.Chat.NonWithdrawable)
 			combined := bucketTotal(resp.Combined.Withdrawable, resp.Combined.NonWithdrawable)
 			total := usage + chat + combined
 
-			output.Info("  Total deposited: %.2f credits", total)
-			output.Info("    Usage:    %.2f  (%.2f withdrawable, %.2f reserved%s)",
+			output.Info("  Project wallet (drains first): %.2f credits", total)
+			output.Info("    Usage:    %.2f  (%.2f yours, %.2f granted%s)",
 				usage,
 				clampNN(resp.Usage.Withdrawable),
 				clampNN(resp.Usage.NonWithdrawable),
 				isolatedSuffix(resp.Usage.Isolated),
 			)
-			output.Info("    Chat:     %.2f  (%.2f withdrawable, %.2f reserved%s)",
+			output.Info("    Chat:     %.2f  (%.2f yours, %.2f granted%s)",
 				chat,
 				clampNN(resp.Chat.Withdrawable),
 				clampNN(resp.Chat.NonWithdrawable),
 				isolatedSuffix(resp.Chat.Isolated),
 			)
-			output.Info("    Combined: %.2f  (%.2f withdrawable, %.2f reserved)",
+			output.Info("    Combined: %.2f  (%.2f yours, %.2f granted)",
 				combined,
 				clampNN(resp.Combined.Withdrawable),
 				clampNN(resp.Combined.NonWithdrawable),
 			)
-			output.Info("  Personal paid balance: %.2f credits", resp.UserPaidCreditsAvailable)
+			output.Info("  Your account balance:   %.2f credits  (fallback when the wallet is empty)", resp.UserPaidCreditsAvailable)
 			ownerNote := "owner — can deposit / withdraw / toggle isolation"
 			if !resp.IsOwner {
 				ownerNote = "read-only access (collaborator or admin)"
@@ -119,7 +119,7 @@ project bank. --bucket defaults to combined. 402 if paid balance is short.`,
 			combined := bucketTotal(balance.Combined.Withdrawable, balance.Combined.NonWithdrawable)
 			usage := bucketTotal(balance.Usage.Withdrawable, balance.Usage.NonWithdrawable)
 			chat := bucketTotal(balance.Chat.Withdrawable, balance.Chat.NonWithdrawable)
-			output.Info("  New project bank balances: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
+			output.Info("  Project wallet now: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
 			// Personal paid balance isn't returned by the deposit endpoint —
 			// callers who need it should run `poof credits project status`
 			// (or `poof credits balance`) after.
@@ -170,7 +170,7 @@ attempts return 402.`,
 			combined := bucketTotal(balance.Combined.Withdrawable, balance.Combined.NonWithdrawable)
 			usage := bucketTotal(balance.Usage.Withdrawable, balance.Usage.NonWithdrawable)
 			chat := bucketTotal(balance.Chat.Withdrawable, balance.Chat.NonWithdrawable)
-			output.Info("  New project bank balances: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
+			output.Info("  Project wallet now: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
 			// Personal paid balance isn't returned by the withdraw endpoint;
 			// run `poof credits balance` after to see the new pool, or
 			// `poof credits project status` for the full picture.
