@@ -71,7 +71,7 @@ var creditsProjectStatusCmd = &cobra.Command{
 				clampNN(resp.Chat.NonWithdrawable),
 				fallbackSuffix(resp.Chat.Isolated),
 			)
-			output.Info("  Your credit balance:    %.2f credits  (fallback when this project's credits run out)", resp.UserPaidCreditsAvailable)
+			output.Info("  Account credit balance: %.2f credits  (fallback when this project's credits run out)", resp.UserPaidCreditsAvailable)
 			ownerNote := "owner — can add / withdraw credits and toggle fallback"
 			if !resp.IsOwner {
 				ownerNote = "read-only access (collaborator or admin)"
@@ -86,7 +86,7 @@ var creditsProjectDepositCmd = &cobra.Command{
 	Use:   "deposit",
 	Short: "Deposit credits from your personal balance into the project bank",
 	Long: `Move whole paid credits (subscription + add-on, never daily) from
-your credit balance into this project. --bucket defaults to combined.
+your account credit balance into this project. --bucket defaults to combined.
 402 if your balance is short.`,
 	Example: `  poof credits project deposit -p <id> --amount 50
   poof credits project deposit -p <id> --amount 100 --bucket usage`,
@@ -134,7 +134,7 @@ your credit balance into this project. --bucket defaults to combined.
 var creditsProjectWithdrawCmd = &cobra.Command{
 	Use:   "withdraw",
 	Short: "Withdraw credits from the project bank back to your personal balance",
-	Long: `Drain a withdrawable bucket back to your credit balance as a fresh
+	Long: `Drain a withdrawable bucket back to your account credit balance as a fresh
 add-on payment record (6-month expiry). Granted (Poof) credits stay put.
 One withdrawal per (user, project) at a time — concurrent attempts
 return 402.`,
@@ -184,13 +184,13 @@ return 402.`,
 
 var creditsProjectIsolationCmd = &cobra.Command{
 	Use:   "isolation",
-	Short: "Toggle per-purpose fallback to your credit balance (owner-only)",
+	Short: "Toggle per-purpose fallback to your account credit balance (owner-only)",
 	Long: `Per-purpose: when this project's credits run out, should the
-charge fall back to your credit balance (the user's personal pool, the
-② row in the UI), or should that purpose pause? Default: fall back.
+charge fall back to your account credit balance, or should that purpose
+pause? Default: fall back.
 
-  --usage=true / --chat=true   pause when empty (no charge to your credits)
-  --usage=false / --chat=false fall back to your credit balance (default)
+  --usage=true / --chat=true   pause when empty (don't charge your account)
+  --usage=false / --chat=false fall back to your account credit balance (default)
 
 Pass at least one of --usage / --chat.`,
 	Example: `  poof credits project isolation -p <id> --usage true
@@ -249,8 +249,8 @@ Pass at least one of --usage / --chat.`,
 
 		output.Print(state, func() {
 			output.Success("Fallback settings updated for %s.", projectID)
-			output.Info("  Infrastructure fallback: %v", !state.Usage.Isolated)
-			output.Info("  Poof AI fallback:        %v", !state.Chat.Isolated)
+			output.Info("  Infrastructure → account credit balance: %v", !state.Usage.Isolated)
+			output.Info("  Poof AI        → account credit balance: %v", !state.Chat.Isolated)
 		})
 		return nil
 	},
