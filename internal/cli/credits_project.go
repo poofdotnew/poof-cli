@@ -15,16 +15,18 @@ import (
 
 var creditsProjectCmd = &cobra.Command{
 	Use:   "project",
-	Short: "Manage the per-project credit bank (owner-only)",
-	Long: `Per-project credit bank: deposit / withdraw / isolation.
+	Short: "Manage this project's credit balance (owner-only)",
+	Long: `Add / withdraw credits for a specific project, and control whether
+each purpose falls back to your credits when the project runs out.
 
-Buckets: combined (default; either purpose), usage (infra + gas), chat
-(AI chat). Owner-only mutations; collaborators and admins are read-only.`,
+Buckets (where credits can be spent): combined (default; either),
+usage (infrastructure only), chat (Poof AI only). Owner-only mutations;
+collaborators and admins are read-only.`,
 }
 
 var creditsProjectStatusCmd = &cobra.Command{
 	Use:   "status",
-	Short: "Show project credit bank balances and isolation state",
+	Short: "Show this project's credit balance and fallback state",
 	Example: `  poof credits project status -p <id>
   poof credits project status -p <id> --json
   poof credits project status -p <id> --quiet`,
@@ -51,26 +53,26 @@ var creditsProjectStatusCmd = &cobra.Command{
 			combined := bucketTotal(resp.Combined.Withdrawable, resp.Combined.NonWithdrawable)
 			total := usage + chat + combined
 
-			output.Info("  Project wallet (drains first): %.2f credits", total)
-			output.Info("    Usage:    %.2f  (%.2f yours, %.2f granted%s)",
-				usage,
-				clampNN(resp.Usage.Withdrawable),
-				clampNN(resp.Usage.NonWithdrawable),
-				isolatedSuffix(resp.Usage.Isolated),
-			)
-			output.Info("    Chat:     %.2f  (%.2f yours, %.2f granted%s)",
-				chat,
-				clampNN(resp.Chat.Withdrawable),
-				clampNN(resp.Chat.NonWithdrawable),
-				isolatedSuffix(resp.Chat.Isolated),
-			)
-			output.Info("    Combined: %.2f  (%.2f yours, %.2f granted)",
+			output.Info("  Project credit balance (drains first): %.2f credits", total)
+			output.Info("    Combined        %.2f  (%.2f yours, %.2f granted)",
 				combined,
 				clampNN(resp.Combined.Withdrawable),
 				clampNN(resp.Combined.NonWithdrawable),
 			)
-			output.Info("  Your account balance:   %.2f credits  (fallback when the wallet is empty)", resp.UserPaidCreditsAvailable)
-			ownerNote := "owner — can deposit / withdraw / toggle isolation"
+			output.Info("    Infrastructure  %.2f  (%.2f yours, %.2f granted%s)",
+				usage,
+				clampNN(resp.Usage.Withdrawable),
+				clampNN(resp.Usage.NonWithdrawable),
+				fallbackSuffix(resp.Usage.Isolated),
+			)
+			output.Info("    Poof AI         %.2f  (%.2f yours, %.2f granted%s)",
+				chat,
+				clampNN(resp.Chat.Withdrawable),
+				clampNN(resp.Chat.NonWithdrawable),
+				fallbackSuffix(resp.Chat.Isolated),
+			)
+			output.Info("  Your credit balance:    %.2f credits  (fallback when this project's credits run out)", resp.UserPaidCreditsAvailable)
+			ownerNote := "owner — can add / withdraw credits and toggle fallback"
 			if !resp.IsOwner {
 				ownerNote = "read-only access (collaborator or admin)"
 			}
@@ -83,8 +85,9 @@ var creditsProjectStatusCmd = &cobra.Command{
 var creditsProjectDepositCmd = &cobra.Command{
 	Use:   "deposit",
 	Short: "Deposit credits from your personal balance into the project bank",
-	Long: `Move whole paid credits (subscription + add-on, never daily) into the
-project bank. --bucket defaults to combined. 402 if paid balance is short.`,
+	Long: `Move whole paid credits (subscription + add-on, never daily) from
+your credit balance into this project. --bucket defaults to combined.
+402 if your balance is short.`,
 	Example: `  poof credits project deposit -p <id> --amount 50
   poof credits project deposit -p <id> --amount 100 --bucket usage`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -114,12 +117,12 @@ project bank. --bucket defaults to combined. 402 if paid balance is short.`,
 		}
 
 		output.Print(resp, func() {
-			output.Success("Deposited %d credits into the %s bucket.", resp.Deposited, resp.Bucket)
+			output.Success("Added %d credits to this project (%s bucket).", resp.Deposited, resp.Bucket)
 			balance := resp.Balance
 			combined := bucketTotal(balance.Combined.Withdrawable, balance.Combined.NonWithdrawable)
 			usage := bucketTotal(balance.Usage.Withdrawable, balance.Usage.NonWithdrawable)
 			chat := bucketTotal(balance.Chat.Withdrawable, balance.Chat.NonWithdrawable)
-			output.Info("  Project wallet now: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
+			output.Info("  This project's credits now: combined=%.2f infrastructure=%.2f poof_ai=%.2f", combined, usage, chat)
 			// Personal paid balance isn't returned by the deposit endpoint —
 			// callers who need it should run `poof credits project status`
 			// (or `poof credits balance`) after.
@@ -131,10 +134,10 @@ project bank. --bucket defaults to combined. 402 if paid balance is short.`,
 var creditsProjectWithdrawCmd = &cobra.Command{
 	Use:   "withdraw",
 	Short: "Withdraw credits from the project bank back to your personal balance",
-	Long: `Drain a withdrawable bucket back to your personal balance as a fresh
-add-on payment record (6-month expiry). Reserved (Poof-granted) credits
-stay put. One withdrawal per (user, project) at a time — concurrent
-attempts return 402.`,
+	Long: `Drain a withdrawable bucket back to your credit balance as a fresh
+add-on payment record (6-month expiry). Granted (Poof) credits stay put.
+One withdrawal per (user, project) at a time — concurrent attempts
+return 402.`,
 	Example: `  poof credits project withdraw -p <id> --amount 30
   poof credits project withdraw -p <id> --amount 50 --bucket usage`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -164,13 +167,13 @@ attempts return 402.`,
 		}
 
 		output.Print(resp, func() {
-			output.Success("Withdrew %d credits from the %s bucket.", resp.Withdrawn, resp.Bucket)
+			output.Success("Withdrew %d credits from this project (%s bucket).", resp.Withdrawn, resp.Bucket)
 			output.Info("  Payment record: %s", resp.PaymentRecordID)
 			balance := resp.Balance
 			combined := bucketTotal(balance.Combined.Withdrawable, balance.Combined.NonWithdrawable)
 			usage := bucketTotal(balance.Usage.Withdrawable, balance.Usage.NonWithdrawable)
 			chat := bucketTotal(balance.Chat.Withdrawable, balance.Chat.NonWithdrawable)
-			output.Info("  Project wallet now: combined=%.2f usage=%.2f chat=%.2f", combined, usage, chat)
+			output.Info("  This project's credits now: combined=%.2f infrastructure=%.2f poof_ai=%.2f", combined, usage, chat)
 			// Personal paid balance isn't returned by the withdraw endpoint;
 			// run `poof credits balance` after to see the new pool, or
 			// `poof credits project status` for the full picture.
@@ -181,12 +184,16 @@ attempts return 402.`,
 
 var creditsProjectIsolationCmd = &cobra.Command{
 	Use:   "isolation",
-	Short: "Toggle per-purpose project bank isolation (owner-only)",
-	Long: `When isolated (true), that purpose only spends from the project bank
-and pauses when empty. Off (false, default), it falls back to the owner's
-personal balance. Pass at least one of --usage / --chat.`,
+	Short: "Toggle per-purpose fallback to your credit balance (owner-only)",
+	Long: `Per-purpose: when this project's credits run out, fall back to
+your balance, or pause that purpose? Default: fall back (false).
+
+  --usage=true / --chat=true   pause when empty (no fallback)
+  --usage=false / --chat=false fall back to your balance (default)
+
+Pass at least one of --usage / --chat.`,
 	Example: `  poof credits project isolation -p <id> --usage true
-  poof credits project isolation -p <id> --chat false --usage true`,
+  poof credits project isolation -p <id> --usage true --chat false`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
@@ -240,9 +247,9 @@ personal balance. Pass at least one of --usage / --chat.`,
 		}
 
 		output.Print(state, func() {
-			output.Success("Isolation updated for %s.", projectID)
-			output.Info("  Usage isolated: %v", state.Usage.Isolated)
-			output.Info("  Chat  isolated: %v", state.Chat.Isolated)
+			output.Success("Fallback settings updated for %s.", projectID)
+			output.Info("  Infrastructure fallback: %v", !state.Usage.Isolated)
+			output.Info("  Poof AI fallback:        %v", !state.Chat.Isolated)
 		})
 		return nil
 	},
@@ -285,9 +292,12 @@ func bucketTotal(w, nw float64) float64 {
 	return clampNN(w) + clampNN(nw)
 }
 
-func isolatedSuffix(isolated bool) string {
+// fallbackSuffix tags purposes that won't fall back to the user's credits
+// when this project runs out (server isolated=true). Empty when fallback
+// is enabled (the default).
+func fallbackSuffix(isolated bool) string {
 	if isolated {
-		return ", ISOLATED"
+		return ", no fallback"
 	}
 	return ""
 }

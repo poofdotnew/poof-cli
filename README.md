@@ -305,24 +305,24 @@ poof task test-results -p <id> --history  # include older runs that have been su
 
 ### Credits
 
-User-level (your personal pool):
+Your credit balance:
 
 ```bash
 poof credits balance                   # check credit balance
 poof credits topup --quantity 5        # buy credits via x402 USDC
 ```
 
-Per-project credit bank (owner-only — pre-fund a project so it doesn't draw from your personal pool):
+Per-project credits (owner-only — credits scoped to a specific project so its costs don't draw from your balance first):
 
 ```bash
-poof credits project status -p <id>                                     # bucket balances + isolation
-poof credits project deposit  -p <id> --amount 50                       # default bucket: combined
-poof credits project deposit  -p <id> --amount 100 --bucket usage       # runtime-only
-poof credits project withdraw -p <id> --amount 30                       # back to your personal balance
-poof credits project isolation -p <id> --usage true --chat false        # hard-cap runtime, allow chat fallback
+poof credits project status -p <id>                                     # bucket totals + fallback flags
+poof credits project deposit  -p <id> --amount 50                       # default: combined (either purpose)
+poof credits project deposit  -p <id> --amount 100 --bucket usage       # infrastructure only
+poof credits project withdraw -p <id> --amount 30                       # back to your credit balance
+poof credits project isolation -p <id> --usage true --chat false        # pause infra on empty; let AI fall back
 ```
 
-Bucket defaults to `combined` (spendable on either purpose). `usage` is runtime-only (infra + gas), `chat` is AI-only. Drain order: purpose bucket → `combined` → personal balance (unless that purpose is isolated).
+Bucket scopes what a credit can be spent on: `combined` (either purpose), `usage` (infrastructure only), `chat` (Poof AI only). Drain order: purpose bucket → `combined` → your credit balance (unless that purpose has fallback off).
 
 ### Usage & Overuse Limits
 
