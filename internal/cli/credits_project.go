@@ -185,11 +185,12 @@ return 402.`,
 var creditsProjectIsolationCmd = &cobra.Command{
 	Use:   "isolation",
 	Short: "Toggle per-purpose fallback to your credit balance (owner-only)",
-	Long: `Per-purpose: when this project's credits run out, fall back to
-your balance, or pause that purpose? Default: fall back (false).
+	Long: `Per-purpose: when this project's credits run out, should the
+charge fall back to your credit balance (the user's personal pool, the
+② row in the UI), or should that purpose pause? Default: fall back.
 
-  --usage=true / --chat=true   pause when empty (no fallback)
-  --usage=false / --chat=false fall back to your balance (default)
+  --usage=true / --chat=true   pause when empty (no charge to your credits)
+  --usage=false / --chat=false fall back to your credit balance (default)
 
 Pass at least one of --usage / --chat.`,
 	Example: `  poof credits project isolation -p <id> --usage true
