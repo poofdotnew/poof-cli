@@ -235,20 +235,51 @@ func runAndSubmit(ctx context.Context, client *tarobase.Client, docs []tarobase.
 // ---- data get ----------------------------------------------------------------
 
 var dataGetCmd = &cobra.Command{
-	Use:     "get",
-	Short:   "Read a document or list a collection by path",
-	Example: `  poof data get -p <id> --path memories/<addr>`,
+	Use:   "get",
+	Short: "Read a document or list a collection by path",
+	Long: `Read a single document (even-segment path like memories/<addr>) or list a
+collection (odd-segment path like user/<addr>/TokenTransfer) by path.
+
+Optional filters apply to collection reads:
+  --prompt    Natural-language filter evaluated server-side, e.g.
+              "most recent 20 messages, newest first". Cuts down noisy
+              listings without a dedicated policy query.
+  --limit     Cap the number of returned documents.
+  --cursor    Opaque pagination cursor from a previous page.
+  --include-subpaths  Also walk nested sub-collections at the same path.
+  --shape     JSON object describing related docs to resolve inline
+              (see the tarobase-core GetOptions.shape shape).`,
+	Example: `  poof data get -p <id> --path memories/<addr>
+  poof data get -p <id> --path chat --prompt "most recent 20 messages, newest first" --limit 20
+  poof data get --app-id <id> --chain mainnet --path chat --limit 50 --cursor <cursor-from-previous-page>`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 		path, _ := cmd.Flags().GetString("path")
 		if path == "" {
 			return fmt.Errorf("--path is required")
 		}
+		prompt, _ := cmd.Flags().GetString("prompt")
+		limit, _ := cmd.Flags().GetInt("limit")
+		cursor, _ := cmd.Flags().GetString("cursor")
+		includeSubPaths, _ := cmd.Flags().GetBool("include-subpaths")
+		shapeStr, _ := cmd.Flags().GetString("shape")
+		opts := &tarobase.GetOptions{
+			Prompt:          prompt,
+			Limit:           limit,
+			Cursor:          cursor,
+			IncludeSubPaths: includeSubPaths,
+		}
+		if shapeStr != "" {
+			if !json.Valid([]byte(shapeStr)) {
+				return fmt.Errorf("--shape must be a JSON object")
+			}
+			opts.Shape = json.RawMessage(shapeStr)
+		}
 		client, err := dataClient(ctx)
 		if err != nil {
 			return err
 		}
-		raw, err := client.Get(ctx, path)
+		raw, err := client.Get(ctx, path, opts)
 		if err != nil {
 			return handleError(err)
 		}
@@ -447,6 +478,11 @@ func init() {
 	_ = dataSetManyCmd.MarkFlagRequired("from-json")
 
 	dataGetCmd.Flags().String("path", "", "Tarobase path")
+	dataGetCmd.Flags().String("prompt", "", "Natural-language filter evaluated server-side on collection reads (e.g. \"most recent 20 messages, newest first\"). Base64-encoded on the wire, matching the tarobase-core SDK.")
+	dataGetCmd.Flags().Int("limit", 0, "Cap the number of returned documents on a collection read. 0 = no explicit limit.")
+	dataGetCmd.Flags().String("cursor", "", "Opaque pagination cursor from a prior page; pair with --limit to page through a collection.")
+	dataGetCmd.Flags().Bool("include-subpaths", false, "On a collection read, also include documents under nested sub-collections of the same path.")
+	dataGetCmd.Flags().String("shape", "", "JSON object describing related documents to resolve inline (tarobase-core GetOptions.shape).")
 	_ = dataGetCmd.MarkFlagRequired("path")
 
 	dataGetManyCmd.Flags().String("from-json", "", "Path to a JSON array of paths (or /dev/stdin)")

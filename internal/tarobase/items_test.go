@@ -2,6 +2,7 @@ package tarobase
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -129,12 +130,72 @@ func TestGet_URLEncodesPath(t *testing.T) {
 		},
 	})
 	defer cleanup()
-	_, err := client.Get(context.Background(), "user/abc/TokenTransfer/tt1")
+	_, err := client.Get(context.Background(), "user/abc/TokenTransfer/tt1", nil)
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
 	if !strings.Contains(seenQuery, "path=user%2Fabc%2FTokenTransfer%2Ftt1") {
 		t.Errorf("path not URL-encoded: %q", seenQuery)
+	}
+}
+
+func TestGet_AppliesPromptLimitCursorAsQueryParams(t *testing.T) {
+	var seenQuery string
+	client, cleanup := mockServer(t, map[string]http.HandlerFunc{
+		"/items": func(w http.ResponseWriter, r *http.Request) {
+			seenQuery = r.URL.RawQuery
+			_, _ = io.WriteString(w, `[]`)
+		},
+	})
+	defer cleanup()
+	_, err := client.Get(context.Background(), "chat", &GetOptions{
+		Prompt:          "most recent 20 messages, newest first",
+		Limit:           20,
+		Cursor:          "opaque-cursor-xyz==",
+		IncludeSubPaths: true,
+		Shape:           json.RawMessage(`{"author":true}`),
+	})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	// Prompt should be base64-encoded (matching tarobase-core's safeBtoa).
+	wantPrompt := base64.StdEncoding.EncodeToString([]byte("most recent 20 messages, newest first"))
+	if !strings.Contains(seenQuery, "prompt="+wantPrompt) {
+		t.Errorf("prompt not base64-encoded on the wire: %q", seenQuery)
+	}
+	if !strings.Contains(seenQuery, "limit=20") {
+		t.Errorf("limit missing: %q", seenQuery)
+	}
+	// Cursor is URL-encoded (= → %3D).
+	if !strings.Contains(seenQuery, "cursor=opaque-cursor-xyz%3D%3D") {
+		t.Errorf("cursor not URL-encoded: %q", seenQuery)
+	}
+	if !strings.Contains(seenQuery, "includeSubPaths=true") {
+		t.Errorf("includeSubPaths missing: %q", seenQuery)
+	}
+	if !strings.Contains(seenQuery, "shape=") {
+		t.Errorf("shape missing: %q", seenQuery)
+	}
+}
+
+func TestGet_OmitsEmptyOptionParams(t *testing.T) {
+	var seenQuery string
+	client, cleanup := mockServer(t, map[string]http.HandlerFunc{
+		"/items": func(w http.ResponseWriter, r *http.Request) {
+			seenQuery = r.URL.RawQuery
+			_, _ = io.WriteString(w, `[]`)
+		},
+	})
+	defer cleanup()
+	// Zero-valued opts should behave identically to nil — just the path.
+	_, err := client.Get(context.Background(), "chat", &GetOptions{})
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	for _, bad := range []string{"prompt=", "limit=", "cursor=", "includeSubPaths", "shape="} {
+		if strings.Contains(seenQuery, bad) {
+			t.Errorf("zero-valued opts leaked %q into query: %q", bad, seenQuery)
+		}
 	}
 }
 
