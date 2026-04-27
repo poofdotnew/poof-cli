@@ -59,11 +59,18 @@ var projectCreateCmd = &cobra.Command{
 	Short: "Create a new project",
 	Example: `  poof project create -m "Build a token-gated voting app"
   poof project create -m "NFT marketplace" --mode policy
+  poof project create --no-ai --title "Agent Memory"
+  poof project create --no-ai --mode backend,policy --policy policy/poof.json --constants policy/constants.json
   poof project create -m "Staking dashboard" --public=false
   echo "Build a chat app" | poof project create --stdin`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
+		}
+
+		noAI, _ := cmd.Flags().GetBool("no-ai")
+		if noAI {
+			return runNoAIProjectCreate(cmd)
 		}
 
 		message, _ := cmd.Flags().GetString("message")
@@ -98,6 +105,63 @@ var projectCreateCmd = &cobra.Command{
 		})
 		return nil
 	},
+}
+
+func runNoAIProjectCreate(cmd *cobra.Command) error {
+	policy, err := readJSONFlagFile(cmd, "policy")
+	if err != nil {
+		return err
+	}
+	constants, err := readJSONFlagFile(cmd, "constants")
+	if err != nil {
+		return err
+	}
+	mode, err := resolveNoAIProjectMode(cmd)
+	if err != nil {
+		return err
+	}
+
+	isPublic, _ := cmd.Flags().GetBool("public")
+	req := api.CloudProjectCreateRequest{
+		Title:          mustGetString(cmd, "title"),
+		Description:    mustGetString(cmd, "description"),
+		Slug:           mustGetString(cmd, "slug"),
+		GenerationMode: mode,
+		IsPublic:       &isPublic,
+		Policy:         policy,
+		Constants:      constants,
+	}
+
+	resp, err := apiClient.CreateCloudProject(context.Background(), &req)
+	if err != nil {
+		return handleError(err)
+	}
+
+	output.Print(resp, func() {
+		output.Success("Project created: %s", resp.ProjectID)
+		output.Info("Mode:          %s", mode)
+		if resp.PolicyState != nil && resp.PolicyState.ConnectionInfo != nil {
+			printConnectionInfo(resp.PolicyState.ConnectionInfo)
+		}
+		output.Info("Next: poof policy deploy -p %s --policy policy/poof.json --constants policy/constants.json", resp.ProjectID)
+		output.Info("AI later: poof iterate -p %s -m \"Add ...\"", resp.ProjectID)
+	})
+	return nil
+}
+
+func resolveNoAIProjectMode(cmd *cobra.Command) (string, error) {
+	mode, _ := cmd.Flags().GetString("mode")
+	if !cmd.Flags().Changed("mode") {
+		return "backend,policy", nil
+	}
+	switch mode {
+	case "policy", "backend,policy":
+		return mode, nil
+	case "backend":
+		return "backend,policy", nil
+	default:
+		return "", fmt.Errorf("--no-ai supports --mode policy or backend,policy (got %q)", mode)
+	}
 }
 
 var projectUpdateCmd = &cobra.Command{
@@ -316,10 +380,16 @@ func init() {
 	projectListCmd.Flags().Int("limit", 10, "Max projects to return")
 	projectListCmd.Flags().Int("offset", 0, "Offset for pagination")
 
-	projectCreateCmd.Flags().StringP("message", "m", "", "First message describing what to build (required)")
+	projectCreateCmd.Flags().StringP("message", "m", "", "First message describing what to build (required unless --no-ai)")
 	projectCreateCmd.Flags().Bool("public", true, "Make project public")
 	projectCreateCmd.Flags().Bool("stdin", false, "Read message from stdin")
 	projectCreateCmd.Flags().String("mode", "full", "Generation mode: full, policy, ui,policy, backend,policy")
+	projectCreateCmd.Flags().Bool("no-ai", false, "Create the project without invoking Poof AI")
+	projectCreateCmd.Flags().String("title", "", "Project title for --no-ai")
+	projectCreateCmd.Flags().String("description", "", "Project description for --no-ai")
+	projectCreateCmd.Flags().String("slug", "", "Project slug for --no-ai")
+	projectCreateCmd.Flags().String("policy", "", "Path to initial policy JSON file for --no-ai")
+	projectCreateCmd.Flags().String("constants", "", "Path to initial constants JSON file for --no-ai")
 
 	projectUpdateCmd.Flags().String("title", "", "New title")
 	projectUpdateCmd.Flags().String("description", "", "New description")

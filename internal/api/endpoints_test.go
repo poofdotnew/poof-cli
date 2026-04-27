@@ -676,6 +676,220 @@ func TestGetMessages_Success(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// Direct Project / Policy
+// ---------------------------------------------------------------------------
+
+func TestCreateCloudProject_Success(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/cloud/project" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &receivedBody)
+		json.NewEncoder(w).Encode(CloudProjectCreateResponse{
+			Success:   true,
+			ProjectID: "cloud-1",
+			Message:   "created",
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	req := &CloudProjectCreateRequest{
+		Title:          "Direct Backend",
+		GenerationMode: "backend,policy",
+		Policy:         `{"items/$id":{"rules":{"read":"true"}}}`,
+	}
+	resp, err := client.CreateCloudProject(context.Background(), req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ProjectID != "cloud-1" {
+		t.Errorf("expected ProjectID=cloud-1, got %q", resp.ProjectID)
+	}
+	if receivedBody["tarobaseToken"] != "tok" {
+		t.Errorf("expected tarobaseToken to be set, got %v", receivedBody["tarobaseToken"])
+	}
+	if receivedBody["generationMode"] != "backend,policy" {
+		t.Errorf("expected generationMode to be sent, got %v", receivedBody["generationMode"])
+	}
+	if req.TarobaseToken != "" {
+		t.Errorf("request should not be mutated, got TarobaseToken=%q", req.TarobaseToken)
+	}
+}
+
+func TestGetPolicy_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/policy" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(PolicyStateResponse{
+			ProjectID:     "proj-1",
+			LatestTaskID:  "task-1",
+			Policy:        "{}",
+			Constants:     "{}",
+			PolicyHash:    "ph",
+			ConstantsHash: "ch",
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.GetPolicy(context.Background(), "proj-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.PolicyHash != "ph" || resp.ConstantsHash != "ch" {
+		t.Fatalf("unexpected hashes: %#v", resp)
+	}
+}
+
+func TestValidatePolicy_Success(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/policy/validate" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &receivedBody)
+		json.NewEncoder(w).Encode(PolicyDeployResult{
+			Success:     true,
+			ProjectID:   "proj-1",
+			Environment: "draft",
+			AppID:       "app-1",
+			PolicyHash:  "ph",
+			Validation:  PolicyValidation{Valid: true},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.ValidatePolicy(context.Background(), "proj-1", &PolicyRequest{
+		Environment: "draft",
+		Policy:      "{}",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !resp.Validation.Valid {
+		t.Fatal("expected validation to be valid")
+	}
+	if receivedBody["tarobaseToken"] != "tok" {
+		t.Errorf("expected tarobaseToken to be set, got %v", receivedBody["tarobaseToken"])
+	}
+}
+
+func TestDeployPolicy_DraftSuccess(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/policy/deploy" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &receivedBody)
+		json.NewEncoder(w).Encode(PolicyDeployResult{
+			Success:     true,
+			ProjectID:   "proj-1",
+			TaskID:      "task-2",
+			Environment: "draft",
+			AppID:       "app-1",
+			PolicyHash:  "ph",
+			Validation:  PolicyValidation{Valid: true},
+			Deployed:    true,
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.DeployPolicy(context.Background(), "proj-1", &PolicyRequest{
+		Environment: "draft",
+		Policy:      "{}",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.TaskID != "task-2" {
+		t.Errorf("expected task-2, got %q", resp.TaskID)
+	}
+	if _, ok := receivedBody["signedPermitTransaction"]; ok {
+		t.Error("draft deploy should not include signedPermitTransaction")
+	}
+}
+
+func TestRollbackPolicy_DraftSuccess(t *testing.T) {
+	var receivedBody map[string]interface{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/policy/rollback" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		body, _ := io.ReadAll(r.Body)
+		json.Unmarshal(body, &receivedBody)
+		json.NewEncoder(w).Encode(PolicyDeployResult{
+			Success:     true,
+			ProjectID:   "proj-1",
+			TaskID:      "task-rollback",
+			Environment: "draft",
+			AppID:       "app-1",
+			PolicyHash:  "ph",
+			Validation:  PolicyValidation{Valid: true},
+			Deployed:    true,
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	req := &PolicyRequest{
+		Environment: "draft",
+		TaskID:      "task-1",
+	}
+	resp, err := client.RollbackPolicy(context.Background(), "proj-1", req)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.TaskID != "task-rollback" {
+		t.Errorf("expected task-rollback, got %q", resp.TaskID)
+	}
+	if receivedBody["taskId"] != "task-1" {
+		t.Errorf("expected taskId=task-1, got %v", receivedBody["taskId"])
+	}
+	if receivedBody["tarobaseToken"] != "tok" {
+		t.Errorf("expected tarobaseToken to be set, got %v", receivedBody["tarobaseToken"])
+	}
+	if req.TarobaseToken != "" {
+		t.Errorf("request should not be mutated, got TarobaseToken=%q", req.TarobaseToken)
+	}
+}
+
+func TestPolicyHistory_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/policy/history" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("limit") != "5" {
+			t.Errorf("expected limit=5, got %q", r.URL.Query().Get("limit"))
+		}
+		json.NewEncoder(w).Encode(PolicyHistoryResponse{
+			ProjectID: "proj-1",
+			History:   []PolicyHistoryEntry{{TaskID: "task-1", Title: "Bootstrap"}},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.PolicyHistory(context.Background(), "proj-1", 5)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(resp.History) != 1 || resp.History[0].TaskID != "task-1" {
+		t.Fatalf("unexpected history: %#v", resp.History)
+	}
+}
+
+// ---------------------------------------------------------------------------
 // Security
 // ---------------------------------------------------------------------------
 

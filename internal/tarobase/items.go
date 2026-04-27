@@ -53,7 +53,7 @@ func (c *Client) Set(ctx context.Context, path string, document map[string]any) 
 
 // GetOptions tunes a Get call. All fields are optional; a nil or zero-valued
 // GetOptions means "list the path as-is, no filter". The knobs here mirror
-// the @pooflabs/web / tarobase-core SDK's GetOptions so behaviour is
+// the @pooflabs/web / tarobase-core SDK's GetOptions so behavior is
 // consistent across the CLI and the app-runtime SDK.
 type GetOptions struct {
 	// Prompt is a natural-language filter evaluated server-side (e.g.
@@ -71,7 +71,7 @@ type GetOptions struct {
 	// under nested sub-collections of the same path.
 	IncludeSubPaths bool
 	// Shape is a JSON object describing which related documents to
-	// resolve alongside each hit. Serialised verbatim into the `shape`
+	// resolve alongside each hit. Serialized verbatim into the `shape`
 	// query param.
 	Shape json.RawMessage
 }
