@@ -205,11 +205,14 @@ Runs a security scan, checks publish eligibility, and deploys.
 ```bash
 poof project list                              # list all projects
 poof project create -m "Build a ..."           # create a project
+poof project create --no-ai --title "Backend"  # create a backend/policy project without AI
 poof project status -p <id>                    # get status, URLs, deploy info
 poof project messages -p <id>                  # view conversation history
 poof project update -p <id> --title "My App"   # update metadata
 poof project delete -p <id> --yes               # delete (irreversible)
 ```
+
+`poof project create --no-ai` accepts `--title`, `--description`, `--slug`, `--public`, `--mode policy|backend,policy`, `--policy`, and `--constants`. The default no-AI mode is `backend,policy`; the resulting project can still be passed to AI commands later with `poof iterate -p <id> ...`.
 
 ### AI Chat
 
@@ -233,6 +236,35 @@ poof files get -p <id> --json                             # full project dump as
 poof files update -p <id> --file src/config.ts --content "export const X = 1;"
 poof files update -p <id> --from-json files.json          # bulk update from JSON
 ```
+
+### Direct Policy/DB (no AI)
+
+Create and manage a project-backed policy/database backend directly from local policy files. This path provisions the same project-scoped Tarobase apps and versioned policy/constants state as normal Poof projects, but it does not invoke Poof AI unless you later call `poof iterate`.
+
+```bash
+# Create a backend/policy project
+poof project create --no-ai --title "Agent Memory"
+poof project create --no-ai --mode backend,policy --policy policy/poof.json --constants policy/constants.json
+
+# Fetch or write the latest policy files
+poof policy get -p <id> --json
+poof policy get -p <id> --out-dir policy
+
+# Validate and deploy policy/constants
+poof policy validate -p <id> --policy policy/poof.json --constants policy/constants.json
+poof policy deploy -p <id> --policy policy/poof.json --constants policy/constants.json
+poof policy deploy -p <id> --env preview
+poof policy deploy -p <id> --env production --yes
+
+# Inspect history and roll back to draft
+poof policy history -p <id>
+poof policy rollback -p <id> --task <taskId>
+
+# Optionally use AI later on the same project
+poof iterate -p <id> -m "Add a typed helper for the new policy query"
+```
+
+`--env` defaults to `draft`. Preview and production policy deploys use the same signed update-authority permit flow as `poof deploy preview|production`; production requires `--yes`. Production deploys use the latest stored policy/constants version, so deploy file changes or rollbacks to draft first, run the required production gate, then deploy production without `--policy`/`--constants`.
 
 ### Data (runtime reads/writes)
 
