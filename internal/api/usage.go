@@ -87,7 +87,7 @@ type InfraUsageResponse struct {
 	Environments EnvBreakdown `json:"environments"`
 	LastUpdated  *string      `json:"lastUpdated"`
 
-	// Server-side stale flags: callers MUST honour these before acting on
+	// Server-side stale flags: callers MUST honor these before acting on
 	// any of the corresponding fields.
 	SummaryStale       bool `json:"summaryStale,omitempty"`
 	BlockedStatusStale bool `json:"blockedStatusStale,omitempty"`

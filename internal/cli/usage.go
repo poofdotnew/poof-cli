@@ -20,7 +20,7 @@ var usageStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Show this month's compute / storage / cost summary",
 	Long: `Current-month requests / CPU / storage / cost, free vs paid breakdown,
-overuse limit, pause state. Honour summaryStale / blockedStatusStale —
+overuse limit, pause state. Honor summaryStale / blockedStatusStale —
 when true, the corresponding fields are best-effort and shouldn't be
 acted on.`,
 	Example: `  poof usage status -p <id>
