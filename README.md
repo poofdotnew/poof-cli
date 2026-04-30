@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.svg" alt="poof CLI" width="900"/>
+  <img src="assets/banner.png" alt="poof CLI" width="900"/>
 </p>
 
 <p align="center">
