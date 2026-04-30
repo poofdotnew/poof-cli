@@ -305,9 +305,32 @@ poof task test-results -p <id> --history  # include older runs that have been su
 
 ### Credits
 
+Account credit balance (your personal pool):
+
 ```bash
-poof credits balance                   # check credit balance
+poof credits balance                   # check account credit balance
 poof credits topup --quantity 5        # buy credits via x402 USDC
+```
+
+Per-project credits (owner-only — credits scoped to a specific project so its costs don't draw from your account first):
+
+```bash
+poof credits project status -p <id>                                     # bucket totals + fallback flags
+poof credits project deposit  -p <id> --amount 50                       # default: combined (either purpose)
+poof credits project deposit  -p <id> --amount 100 --bucket usage       # infrastructure only
+poof credits project withdraw -p <id> --amount 30                       # back to your account credit balance
+poof credits project isolation -p <id> --usage true --chat false        # pause infra on empty; let AI fall back
+```
+
+Bucket scopes what a credit can be spent on: `combined` (either purpose), `usage` (infrastructure only), `chat` (Poof AI only). Drain order: purpose bucket → `combined` → your account credit balance (unless that purpose has fallback off).
+
+### Usage & Overuse Limits
+
+```bash
+poof usage status -p <id>                  # this month's compute / cost / pause state
+poof usage limit  -p <id> --credits 50     # cap paid overage at N credits
+poof usage limit  -p <id> --clear          # remove the cap
+poof usage resume -p <id>                  # unblock a paused project (preconditions must be met)
 ```
 
 ### Security
