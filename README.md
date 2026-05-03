@@ -344,6 +344,7 @@ poof security scan -p <id> --wait     # block until scan finishes, show findings
 
 ```bash
 poof secrets get -p <id>                                       # list required/optional secrets
+poof secrets get -p <id> --environment preview                 # check mainnet preview secrets
 poof secrets get -p <id> --environment production              # filter by environment
 poof secrets set -p <id> API_KEY=sk-123 DB_URL=postgres://...  # set secret values
 ```
@@ -360,9 +361,13 @@ poof domain add myapp.com -p <id> --default     # set as default
 
 ```bash
 poof logs -p <id>                              # get runtime logs
-poof logs -p <id> --environment preview        # filter by environment
+poof logs -p <id> --environment preview        # mainnet preview runtime logs
+poof logs -p <id> --environment production     # production runtime logs
 poof logs -p <id> --limit 50                   # limit entries
 ```
+
+For `poof logs` and `poof secrets get`, environments use the same CLI-facing
+names as the data plane: `draft`, `preview`, and `production`.
 
 ### Templates
 

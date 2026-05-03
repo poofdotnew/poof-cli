@@ -18,6 +18,7 @@ var secretsGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get secret names and requirements",
 	Example: `  poof secrets get -p <id>
+  poof secrets get -p <id> --environment preview
   poof secrets get -p <id> --environment production`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -113,7 +114,7 @@ var secretsSetCmd = &cobra.Command{
 }
 
 func init() {
-	secretsGetCmd.Flags().String("environment", "", "Environment: development, mainnet-preview, production")
+	secretsGetCmd.Flags().String("environment", "", "Environment: draft, preview, production")
 
 	secretsCmd.AddCommand(secretsGetCmd)
 	secretsCmd.AddCommand(secretsSetCmd)

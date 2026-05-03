@@ -869,8 +869,8 @@ func TestListTemplates_NoParams(t *testing.T) {
 
 func TestGetLogs_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("environment") != "preview" {
-			t.Errorf("expected environment=preview, got %q", r.URL.Query().Get("environment"))
+		if r.URL.Query().Get("environment") != "mainnet-preview" {
+			t.Errorf("expected environment=mainnet-preview, got %q", r.URL.Query().Get("environment"))
 		}
 		if r.URL.Query().Get("limit") != "50" {
 			t.Errorf("expected limit=50, got %q", r.URL.Query().Get("limit"))
@@ -893,6 +893,24 @@ func TestGetLogs_Success(t *testing.T) {
 	}
 	if resp.Logs[0].Level != "info" {
 		t.Errorf("expected level=info, got %q", resp.Logs[0].Level)
+	}
+}
+
+func TestGetLogs_RejectsUnknownEnvironment(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		json.NewEncoder(w).Encode(LogsResponse{})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	_, err := client.GetLogs(context.Background(), "proj-1", "staging", 50, 0)
+	if err == nil || !strings.Contains(err.Error(), "invalid environment") {
+		t.Fatalf("expected invalid environment error, got %v", err)
+	}
+	if called {
+		t.Fatal("server should not be called for invalid environment")
 	}
 }
 
@@ -968,6 +986,9 @@ func TestSetPreferences_Success(t *testing.T) {
 
 func TestGetSecrets_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("environment") != "mainnet-preview" {
+			t.Errorf("expected environment=mainnet-preview, got %q", r.URL.Query().Get("environment"))
+		}
 		json.NewEncoder(w).Encode(SecretsResponse{
 			SecretRequirements: SecretRequirements{
 				Required: []SecretEntry{{Key: "API_KEY", Label: "API Key", IsRequired: true}},
@@ -979,12 +1000,30 @@ func TestGetSecrets_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	resp, err := client.GetSecrets(context.Background(), "proj-1", "")
+	resp, err := client.GetSecrets(context.Background(), "proj-1", "preview")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(resp.SecretRequirements.Required) != 1 || resp.SecretRequirements.Required[0].Key != "API_KEY" {
 		t.Errorf("unexpected required secrets: %v", resp.SecretRequirements.Required)
+	}
+}
+
+func TestGetSecrets_RejectsUnknownEnvironment(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called = true
+		json.NewEncoder(w).Encode(SecretsResponse{})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	_, err := client.GetSecrets(context.Background(), "proj-1", "local")
+	if err == nil || !strings.Contains(err.Error(), "invalid environment") {
+		t.Fatalf("expected invalid environment error, got %v", err)
+	}
+	if called {
+		t.Fatal("server should not be called for invalid environment")
 	}
 }
 

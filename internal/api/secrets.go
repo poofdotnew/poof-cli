@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 type SecretsResponse struct {
@@ -40,9 +41,18 @@ type SetSecretsRequest struct {
 }
 
 func (c *Client) GetSecrets(ctx context.Context, projectID, environment string) (*SecretsResponse, error) {
+	normalizedEnvironment, err := normalizeProjectRuntimeEnvironment(environment)
+	if err != nil {
+		return nil, err
+	}
+
 	path := fmt.Sprintf("/api/project/%s/secrets", projectID)
-	if environment != "" {
-		path += "?environment=" + environment
+	params := url.Values{}
+	if normalizedEnvironment != "" {
+		params.Set("environment", normalizedEnvironment)
+	}
+	if len(params) > 0 {
+		path += "?" + params.Encode()
 	}
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
