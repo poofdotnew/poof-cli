@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/output"
@@ -73,16 +74,23 @@ var secretsGetCmd = &cobra.Command{
 }
 
 var secretsSetCmd = &cobra.Command{
-	Use:     "set KEY=VALUE [KEY=VALUE...]",
-	Short:   "Set secret values",
-	Example: `  poof secrets set -p <id> API_KEY=sk-123 DB_URL=postgres://...`,
-	Args:    cobra.MinimumNArgs(1),
+	Use:   "set KEY=VALUE [KEY=VALUE...]",
+	Short: "Set secret values",
+	Example: `  poof secrets set -p <id> API_KEY=sk-123 DB_URL=postgres://...
+  poof secrets set -p <id> --environment production API_KEY=sk-123`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
 			return err
 		}
 
 		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		environment, _ := cmd.Flags().GetString("environment")
+		environment, err = normalizeSecretEnvironment(environment)
 		if err != nil {
 			return err
 		}
@@ -99,22 +107,67 @@ var secretsSetCmd = &cobra.Command{
 			secrets[parts[0]] = parts[1]
 		}
 
-		if err := apiClient.SetSecrets(context.Background(), projectID, secrets); err != nil {
+		ctx := context.Background()
+		if err := apiClient.SetSecrets(ctx, projectID, environment, secrets); err != nil {
 			return handleError(err)
 		}
 
+		resp, err := apiClient.GetSecretsStatus(ctx, projectID)
+		if err != nil {
+			return handleError(fmt.Errorf("secrets were submitted, but verification failed for environment %q: %w", environment, err))
+		}
+		missing := missingSubmittedSecrets(resp.SecretsForEnvironment(environment), secrets)
+		if len(missing) > 0 {
+			return fmt.Errorf("secrets were submitted, but verification did not find values for %s in environment %q", strings.Join(missing, ", "), environment)
+		}
+
 		output.Print(map[string]interface{}{
-			"success": true,
-			"count":   len(secrets),
+			"success":     true,
+			"count":       len(secrets),
+			"environment": environment,
+			"verified":    true,
 		}, func() {
-			output.Success("Set %d secret(s).", len(secrets))
+			output.Success("Set and verified %d secret(s) in %s.", len(secrets), environment)
 		})
 		return nil
 	},
 }
 
+func normalizeSecretEnvironment(environment string) (string, error) {
+	if environment == "" {
+		return "development", nil
+	}
+	switch environment {
+	case "development", "dev", "draft":
+		return "development", nil
+	case "mainnet-preview", "preview":
+		return "mainnet-preview", nil
+	case "production", "prod", "live":
+		return "production", nil
+	default:
+		return "", fmt.Errorf("invalid environment %q (valid: draft, preview, production, live)", environment)
+	}
+}
+
+func missingSubmittedSecrets(existingSecrets []string, submittedSecrets map[string]string) []string {
+	existing := make(map[string]bool, len(existingSecrets))
+	for _, key := range existingSecrets {
+		existing[key] = true
+	}
+
+	missing := make([]string, 0)
+	for key := range submittedSecrets {
+		if !existing[key] {
+			missing = append(missing, key)
+		}
+	}
+	sort.Strings(missing)
+	return missing
+}
+
 func init() {
 	secretsGetCmd.Flags().String("environment", "", "Environment: draft, preview, production")
+	secretsSetCmd.Flags().String("environment", "draft", "Environment: draft, preview, production")
 
 	secretsCmd.AddCommand(secretsGetCmd)
 	secretsCmd.AddCommand(secretsSetCmd)

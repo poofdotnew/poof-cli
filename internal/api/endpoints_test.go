@@ -1029,7 +1029,9 @@ func TestGetSecrets_RejectsUnknownEnvironment(t *testing.T) {
 
 func TestSetSecrets_Success(t *testing.T) {
 	var receivedBody map[string]interface{}
+	var receivedPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
 		if r.Method != http.MethodPost {
 			t.Errorf("expected POST, got %s", r.Method)
 		}
@@ -1041,9 +1043,12 @@ func TestSetSecrets_Success(t *testing.T) {
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.SetSecrets(context.Background(), "proj-1", map[string]string{"API_KEY": "secret"})
+	err := client.SetSecrets(context.Background(), "proj-1", "preview", map[string]string{"API_KEY": "secret"})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if receivedPath != "/api/project/proj-1/secret-ticket" {
+		t.Errorf("expected secret-ticket path, got %s", receivedPath)
 	}
 	secretsMap, ok := receivedBody["secrets"].(map[string]interface{})
 	if !ok {
@@ -1051,6 +1056,41 @@ func TestSetSecrets_Success(t *testing.T) {
 	}
 	if secretsMap["API_KEY"] != "secret" {
 		t.Errorf("expected API_KEY=secret, got %v", secretsMap["API_KEY"])
+	}
+	if receivedBody["environment"] != "mainnet-preview" {
+		t.Errorf("expected environment=mainnet-preview, got %v", receivedBody["environment"])
+	}
+}
+
+func TestGetSecretsStatus_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/project/proj-1/secrets/status" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(SecretsStatusResponse{
+			Success: true,
+			StatusByEnvironment: SecretsStatusByEnvironment{
+				Development:    EnvironmentSecretsStatus{AppID: "dev-app", Secrets: []string{"API_KEY"}},
+				MainnetPreview: EnvironmentSecretsStatus{AppID: "preview-app", Secrets: []string{"PREVIEW_KEY"}},
+				Production:     EnvironmentSecretsStatus{AppID: "prod-app", Secrets: []string{"PROD_KEY"}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.GetSecretsStatus(context.Background(), "proj-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := resp.SecretsForEnvironment("development"); len(got) != 1 || got[0] != "API_KEY" {
+		t.Errorf("unexpected development secrets: %v", got)
+	}
+	if got := resp.SecretsForEnvironment("mainnet-preview"); len(got) != 1 || got[0] != "PREVIEW_KEY" {
+		t.Errorf("unexpected preview secrets: %v", got)
+	}
+	if got := resp.SecretsForEnvironment("production"); len(got) != 1 || got[0] != "PROD_KEY" {
+		t.Errorf("unexpected production secrets: %v", got)
 	}
 }
 
