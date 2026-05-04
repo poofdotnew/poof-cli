@@ -12,6 +12,7 @@ var logsCmd = &cobra.Command{
 	Short: "Get runtime logs for a deployed project",
 	Example: `  poof logs -p <id>
   poof logs -p <id> --environment preview --limit 50
+  poof logs -p <id> --environment production
   poof logs -p <id> --offset 50
   poof logs -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -53,7 +54,7 @@ var logsCmd = &cobra.Command{
 }
 
 func init() {
-	logsCmd.Flags().String("environment", "", "Filter by environment: development, mainnet-preview, production")
+	logsCmd.Flags().String("environment", "", "Filter by environment: draft, preview, production")
 	logsCmd.Flags().Int("limit", 50, "Max log entries (server max: 50)")
 	logsCmd.Flags().Int("offset", 0, "Offset for pagination")
 }

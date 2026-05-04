@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 )
 
 type SecretsResponse struct {
@@ -55,7 +56,11 @@ func (r *SecretsStatusResponse) SecretsForEnvironment(environment string) []stri
 	if r == nil {
 		return nil
 	}
-	switch environment {
+	normalizedEnvironment, err := normalizeProjectRuntimeEnvironment(environment)
+	if err != nil {
+		return nil
+	}
+	switch normalizedEnvironment {
 	case "production":
 		return r.StatusByEnvironment.Production.Secrets
 	case "mainnet-preview":
@@ -71,9 +76,18 @@ type SetSecretsRequest struct {
 }
 
 func (c *Client) GetSecrets(ctx context.Context, projectID, environment string) (*SecretsResponse, error) {
+	normalizedEnvironment, err := normalizeProjectRuntimeEnvironment(environment)
+	if err != nil {
+		return nil, err
+	}
+
 	path := fmt.Sprintf("/api/project/%s/secrets", projectID)
-	if environment != "" {
-		path += "?environment=" + environment
+	params := url.Values{}
+	if normalizedEnvironment != "" {
+		params.Set("environment", normalizedEnvironment)
+	}
+	if len(params) > 0 {
+		path += "?" + params.Encode()
 	}
 	body, err := c.Do(ctx, "GET", path, nil)
 	if err != nil {
@@ -88,9 +102,17 @@ func (c *Client) GetSecrets(ctx context.Context, projectID, environment string) 
 }
 
 func (c *Client) SetSecrets(ctx context.Context, projectID, environment string, secrets map[string]string) error {
+	normalizedEnvironment, err := normalizeProjectRuntimeEnvironment(environment)
+	if err != nil {
+		return err
+	}
+	if normalizedEnvironment == "" {
+		normalizedEnvironment = "development"
+	}
+
 	path := fmt.Sprintf("/api/project/%s/secret-ticket", projectID)
-	req := SetSecretsRequest{Secrets: secrets, Environment: environment}
-	_, err := c.Do(ctx, "POST", path, req)
+	req := SetSecretsRequest{Secrets: secrets, Environment: normalizedEnvironment}
+	_, err = c.Do(ctx, "POST", path, req)
 	return err
 }
 

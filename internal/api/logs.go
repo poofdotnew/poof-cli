@@ -22,9 +22,14 @@ type LogsResponse struct {
 }
 
 func (c *Client) GetLogs(ctx context.Context, projectID, environment string, limit, offset int) (*LogsResponse, error) {
+	normalizedEnvironment, err := normalizeProjectRuntimeEnvironment(environment)
+	if err != nil {
+		return nil, err
+	}
+
 	params := url.Values{}
-	if environment != "" {
-		params.Set("environment", environment)
+	if normalizedEnvironment != "" {
+		params.Set("environment", normalizedEnvironment)
 	}
 	if limit > 0 {
 		params.Set("limit", strconv.Itoa(limit))

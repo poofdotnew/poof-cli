@@ -19,6 +19,7 @@ var secretsGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get secret names and requirements",
 	Example: `  poof secrets get -p <id>
+  poof secrets get -p <id> --environment preview
   poof secrets get -p <id> --environment production`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -137,10 +138,14 @@ func normalizeSecretEnvironment(environment string) (string, error) {
 		return "development", nil
 	}
 	switch environment {
-	case "development", "mainnet-preview", "production":
-		return environment, nil
+	case "development", "dev", "draft":
+		return "development", nil
+	case "mainnet-preview", "preview":
+		return "mainnet-preview", nil
+	case "production", "prod", "live":
+		return "production", nil
 	default:
-		return "", fmt.Errorf("invalid environment %q (valid: development, mainnet-preview, production)", environment)
+		return "", fmt.Errorf("invalid environment %q (valid: draft, preview, production, live)", environment)
 	}
 }
 
@@ -161,8 +166,8 @@ func missingSubmittedSecrets(existingSecrets []string, submittedSecrets map[stri
 }
 
 func init() {
-	secretsGetCmd.Flags().String("environment", "", "Environment: development, mainnet-preview, production")
-	secretsSetCmd.Flags().String("environment", "development", "Environment: development, mainnet-preview, production")
+	secretsGetCmd.Flags().String("environment", "", "Environment: draft, preview, production")
+	secretsSetCmd.Flags().String("environment", "draft", "Environment: draft, preview, production")
 
 	secretsCmd.AddCommand(secretsGetCmd)
 	secretsCmd.AddCommand(secretsSetCmd)
