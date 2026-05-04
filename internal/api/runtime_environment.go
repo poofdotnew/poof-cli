@@ -10,9 +10,9 @@ func normalizeProjectRuntimeEnvironment(environment string) (string, error) {
 		return "development", nil
 	case "mainnet-preview", "preview":
 		return "mainnet-preview", nil
-	case "production", "prod":
+	case "production", "prod", "live":
 		return "production", nil
 	default:
-		return "", fmt.Errorf("invalid environment %q (valid: draft, preview, production)", environment)
+		return "", fmt.Errorf("invalid environment %q (valid: draft, preview, production, live)", environment)
 	}
 }

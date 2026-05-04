@@ -85,6 +85,7 @@ func init() {
 	rootCmd.AddCommand(secretsCmd)
 	rootCmd.AddCommand(domainCmd)
 	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(analyticsCmd)
 	rootCmd.AddCommand(preferencesCmd)
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(iterateCmd)
