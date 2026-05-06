@@ -289,8 +289,24 @@ poof deploy preview -p <id>                        # deploy to mainnet preview
 poof deploy production -p <id> --yes               # deploy to production
 poof deploy mobile -p <id> --platform ios --app-name "My App" --app-icon-url https://...
 poof deploy static -p <id> --archive dist.tar.gz   # draft only (mainnet-preview/production via `poof deploy preview` / `poof deploy production`)
+poof deploy backend -p <id> --archive backend-worker.tar.gz # draft backend from a Wrangler-bundled PartyServer artifact
 poof deploy download -p <id>           # start code export
 poof deploy download-url -p <id> --task <taskId>   # get download link
+```
+
+For `poof deploy backend`, build the artifact from Wrangler's bundled Worker output rather than raw TypeScript `dist`:
+
+```bash
+bunx wrangler deploy --dry-run --outdir .poof-backend-bundle
+cat > .poof-backend-bundle/poof-backend-artifact.json <<'JSON'
+{
+  "entrypoint": "index.js",
+  "wranglerVersion": "4.45.2",
+  "apiSpecPath": "generated/api-spec.json"
+}
+JSON
+tar czf backend-worker.tar.gz -C .poof-backend-bundle .
+poof deploy backend -p <id> --archive backend-worker.tar.gz
 ```
 
 ### Tasks and Testing

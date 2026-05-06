@@ -34,7 +34,7 @@ const backendOnlyVerifyPrompt = `Please verify the backend you just built end-to
 
 2. Fix any failures you uncover and re-run the tests until they pass. Do not skip failing tests.
 
-3. Do NOT create any lifecycle-actions/ui-test-*.json files and do NOT run the browser UI test runner. This project has no Poof-generated UI. If the user has deployed a local static frontend via 'poof deploy static' and wants UI tests, they will ask explicitly.
+3. Do NOT create any lifecycle-actions/ui-test-*.json files and do NOT run the browser UI test runner. This project has no Poof-generated UI. If the user has deployed a local static frontend via 'poof deploy static' and wants UI tests, they will ask explicitly. If generationMode contains backend-artifact, the backend source is also user-supplied via 'poof deploy backend'; run existing lifecycle/API tests against the deployed backend, but do not regenerate backend route source from the bundled artifact.
 
 When everything passes, end your turn with a short summary of what policies you tested and the final pass counts.`
 

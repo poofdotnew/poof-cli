@@ -1,10 +1,15 @@
 package cli
 
 import (
+	"archive/tar"
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -244,7 +249,16 @@ var deployStaticCmd = &cobra.Command{
 		}
 
 		if dryRun {
-			output.Info("Would deploy static frontend from %s (%d bytes) to project %s (draft). No changes made.", archivePath, len(archive), projectID)
+			output.Print(map[string]interface{}{
+				"success":     true,
+				"dryRun":      true,
+				"target":      "static",
+				"projectId":   projectID,
+				"archivePath": archivePath,
+				"bytes":       len(archive),
+			}, func() {
+				output.Info("Would deploy static frontend from %s (%d bytes) to project %s (draft). No changes made.", archivePath, len(archive), projectID)
+			})
 			return nil
 		}
 
@@ -275,6 +289,233 @@ var deployStaticCmd = &cobra.Command{
 				output.Success("Static frontend deployed.")
 				if resp.BundleURL != "" {
 					output.Info("  URL: %s", resp.BundleURL)
+				}
+			})
+		}
+		return nil
+	},
+}
+
+type backendArtifactManifest struct {
+	Entrypoint      string `json:"entrypoint"`
+	Main            string `json:"main"`
+	WranglerVersion string `json:"wranglerVersion"`
+	APISpecPath     string `json:"apiSpecPath"`
+	QueuesPath      string `json:"queuesPath"`
+	HeartbeatPath   string `json:"heartbeatPath"`
+}
+
+func cleanArchivePath(value, field string) (string, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", fmt.Errorf("poof-backend-artifact.json must include %s", field)
+	}
+	if strings.ContainsFunc(value, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return "", fmt.Errorf("%s must not contain control characters", field)
+	}
+	if strings.Contains(value, "\\") {
+		return "", fmt.Errorf("%s must use POSIX archive paths", field)
+	}
+	cleaned := path.Clean(value)
+	if cleaned == "." || strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") || strings.HasPrefix(cleaned, "/") {
+		return "", fmt.Errorf("%s must be a safe relative archive path", field)
+	}
+	return cleaned, nil
+}
+
+func cleanArchiveEntryPath(value string) (string, bool, error) {
+	if strings.TrimSpace(value) == "" {
+		return "", false, fmt.Errorf("archive entry must not be empty")
+	}
+	if strings.ContainsFunc(value, func(r rune) bool { return r < 0x20 || r == 0x7f }) {
+		return "", false, fmt.Errorf("archive entry must not contain control characters")
+	}
+	if strings.Contains(value, "\\") {
+		return "", false, fmt.Errorf("archive entry must use POSIX archive paths")
+	}
+	cleaned := path.Clean(value)
+	if cleaned == "." {
+		return "", true, nil
+	}
+	if strings.HasPrefix(cleaned, "../") || strings.Contains(cleaned, "/../") || strings.HasPrefix(cleaned, "/") {
+		return "", false, fmt.Errorf("archive entry must be a safe relative archive path")
+	}
+	return cleaned, false, nil
+}
+
+func validateBackendArchive(archive []byte) error {
+	if len(archive) < 2 || archive[0] != 0x1f || archive[1] != 0x8b {
+		return fmt.Errorf("archive is not a gzip-compressed tar file. Create with: tar czf backend-worker.tar.gz -C .poof-backend-bundle .")
+	}
+
+	gz, err := gzip.NewReader(bytes.NewReader(archive))
+	if err != nil {
+		return fmt.Errorf("failed to read gzip archive: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	entries := map[string]byte{}
+	var manifestBytes []byte
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("failed to read tar archive: %w", err)
+		}
+		name, skipEntry, err := cleanArchiveEntryPath(hdr.Name)
+		if err != nil {
+			return err
+		}
+		if skipEntry {
+			continue
+		}
+		if hdr.Typeflag == tar.TypeSymlink || hdr.Typeflag == tar.TypeLink {
+			return fmt.Errorf("archive must not contain links: %s", name)
+		}
+		if !isTarRegularFile(hdr.Typeflag) && hdr.Typeflag != tar.TypeDir {
+			return fmt.Errorf("archive must not contain special entries: %s", name)
+		}
+		entries[name] = hdr.Typeflag
+		if name == "poof-backend-artifact.json" {
+			manifestBytes, err = io.ReadAll(io.LimitReader(tr, 1024*1024))
+			if err != nil {
+				return fmt.Errorf("failed to read poof-backend-artifact.json: %w", err)
+			}
+		}
+	}
+
+	if len(manifestBytes) == 0 {
+		return fmt.Errorf("backend archive must include poof-backend-artifact.json")
+	}
+
+	var manifest backendArtifactManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return fmt.Errorf("invalid poof-backend-artifact.json: %w", err)
+	}
+
+	entrypoint := manifest.Entrypoint
+	if entrypoint == "" {
+		entrypoint = manifest.Main
+	}
+	entrypoint, err = cleanArchivePath(entrypoint, "entrypoint")
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(manifest.WranglerVersion) == "" {
+		return fmt.Errorf("poof-backend-artifact.json must include wranglerVersion")
+	}
+	if typ, ok := entries[entrypoint]; !ok || !isTarRegularFile(typ) {
+		return fmt.Errorf("backend archive entrypoint %q was not found as a regular file", entrypoint)
+	}
+
+	for field, value := range map[string]string{
+		"apiSpecPath":   manifest.APISpecPath,
+		"queuesPath":    manifest.QueuesPath,
+		"heartbeatPath": manifest.HeartbeatPath,
+	} {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		cleaned, err := cleanArchivePath(value, field)
+		if err != nil {
+			return err
+		}
+		if typ, ok := entries[cleaned]; !ok || !isTarRegularFile(typ) {
+			return fmt.Errorf("backend archive %s %q was not found as a regular file", field, cleaned)
+		}
+	}
+
+	return nil
+}
+
+func isTarRegularFile(typeflag byte) bool {
+	return typeflag == tar.TypeReg || typeflag == 0
+}
+
+var deployBackendCmd = &cobra.Command{
+	Use:   "backend",
+	Short: "Deploy a pre-built PartyServer backend bundle (draft tier only)",
+	Example: `  bunx wrangler deploy --dry-run --outdir .poof-backend-bundle
+  # add poof-backend-artifact.json to .poof-backend-bundle, then:
+  tar czf backend-worker.tar.gz -C .poof-backend-bundle .
+  poof deploy backend -p <id> --archive backend-worker.tar.gz
+  poof deploy backend -p <id> --archive backend-worker.tar.gz --title "backend v2"
+  poof deploy backend -p <id> --archive backend-worker.tar.gz --dry-run`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireAuth(); err != nil {
+			return err
+		}
+
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		archivePath, _ := cmd.Flags().GetString("archive")
+		if archivePath == "" {
+			return fmt.Errorf("--archive is required\n  poof deploy backend -p %s --archive backend-worker.tar.gz", projectID)
+		}
+
+		dryRun, _ := cmd.Flags().GetBool("dry-run")
+		title, _ := cmd.Flags().GetString("title")
+		description, _ := cmd.Flags().GetString("description")
+
+		archive, err := os.ReadFile(archivePath)
+		if err != nil {
+			return fmt.Errorf("failed to read archive %q: %w", archivePath, err)
+		}
+
+		if err := validateBackendArchive(archive); err != nil {
+			return fmt.Errorf("invalid backend archive %q: %w", archivePath, err)
+		}
+
+		if dryRun {
+			output.Print(map[string]interface{}{
+				"success":     true,
+				"dryRun":      true,
+				"target":      "backend",
+				"projectId":   projectID,
+				"archivePath": archivePath,
+				"bytes":       len(archive),
+			}, func() {
+				output.Info("Would deploy backend artifact from %s (%d bytes) to project %s (draft). No changes made.", archivePath, len(archive), projectID)
+			})
+			return nil
+		}
+
+		ctx := context.Background()
+		resp, err := apiClient.DeployBackend(ctx, projectID, archive, title, description)
+		if err != nil {
+			return handleError(err)
+		}
+
+		status, sErr := apiClient.GetProjectStatus(ctx, projectID)
+		if sErr == nil {
+			output.Print(map[string]interface{}{
+				"target":     "backend",
+				"projectId":  projectID,
+				"taskId":     resp.TaskID,
+				"backendUrl": resp.BackendURL,
+				"urls":       status.URLs,
+			}, func() {
+				output.Success("Backend artifact deployed.")
+				if resp.BackendURL != "" {
+					output.Info("  backend: %s", resp.BackendURL)
+				}
+				for name, url := range status.URLs {
+					if url != "" {
+						output.Info("  %s: %s", name, url)
+					}
+				}
+			})
+		} else {
+			output.Print(resp, func() {
+				output.Success("Backend artifact deployed.")
+				if resp.BackendURL != "" {
+					output.Info("  backend: %s", resp.BackendURL)
 				}
 			})
 		}
@@ -410,11 +651,17 @@ func init() {
 	deployStaticCmd.Flags().String("description", "", "Checkpoint description")
 	deployStaticCmd.Flags().Bool("dry-run", false, "Validate without deploying")
 
+	deployBackendCmd.Flags().String("archive", "", "Path to tar.gz archive of Wrangler bundled backend output (required)")
+	deployBackendCmd.Flags().String("title", "", "Checkpoint title")
+	deployBackendCmd.Flags().String("description", "", "Checkpoint description")
+	deployBackendCmd.Flags().Bool("dry-run", false, "Validate without deploying")
+
 	deployCmd.AddCommand(deployCheckCmd)
 	deployCmd.AddCommand(deployPreviewCmd)
 	deployCmd.AddCommand(deployProductionCmd)
 	deployCmd.AddCommand(deployMobileCmd)
 	deployCmd.AddCommand(deployStaticCmd)
+	deployCmd.AddCommand(deployBackendCmd)
 	deployCmd.AddCommand(deployDownloadCmd)
 	deployCmd.AddCommand(deployDownloadURLCmd)
 }
