@@ -34,9 +34,23 @@ const backendOnlyVerifyPrompt = `Please verify the backend you just built end-to
 
 2. Fix any failures you uncover and re-run the tests until they pass. Do not skip failing tests.
 
-3. Do NOT create any lifecycle-actions/ui-test-*.json files and do NOT run the browser UI test runner. This project has no Poof-generated UI. If the user has deployed a local static frontend via 'poof deploy static' and wants UI tests, they will ask explicitly.
+3. Do NOT create any lifecycle-actions/ui-test-*.json files and do NOT run the browser UI test runner. This project has no Poof-generated UI. If the user has deployed a local static frontend via 'poof deploy static' and wants UI tests, they will ask explicitly. If generationMode contains backend-artifact, the backend source is also user-supplied via 'poof deploy backend'; run existing lifecycle/API tests against the deployed backend, but do not regenerate backend route source from the bundled artifact.
 
 When everything passes, end your turn with a short summary of what policies you tested and the final pass counts.`
+
+const backendArtifactVerifyPrompt = `Please verify the uploaded backend artifact end-to-end. This project uses generationMode=backend-artifact, so the backend source is user-supplied as a built bundle. Do NOT regenerate, rewrite, replace, or infer backend source from the uploaded bundle. Do NOT create or run browser UI tests.
+
+Do the following in one turn:
+
+1. Use get_backend_urls and any available API spec metadata to identify the deployed draft backend endpoints.
+
+2. Call representative backend API endpoints with call_backend_api against environment="draft". For every API call that should count as verification evidence, set recordTestResult=true, set a clear testName, and set expectedStatus when the endpoint should return an exact status. Cover both a simple GET endpoint and at least one mutation/write-style endpoint when available.
+
+3. If existing lifecycle action tests are already present, run them too. Do not invent backend source edits if lifecycle tests are missing; API test evidence from call_backend_api is valid for uploaded backend artifacts.
+
+4. Fix only policy/config/test issues that are needed to make verification pass. Do not edit uploaded backend source.
+
+When everything passes, end your turn with a short summary of the backend API/lifecycle checks you ran and the final pass counts.`
 
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
@@ -80,7 +94,11 @@ Unlike 'poof iterate', this command is strict about evidence:
 			message = defaultVerifyPrompt
 			uiTestsEnabled = true
 		case "false", "no", "off", "0":
-			message = backendOnlyVerifyPrompt
+			if genMode, gmErr := fetchGenerationMode(ctx, projectID); gmErr == nil && generationModeIncludesBackendArtifact(genMode) {
+				message = backendArtifactVerifyPrompt
+			} else {
+				message = backendOnlyVerifyPrompt
+			}
 			uiTestsEnabled = false
 		default: // auto / empty
 			// Two independent signals can route us to the lifecycle-only prompt:
@@ -98,6 +116,12 @@ Unlike 'poof iterate', this command is strict about evidence:
 			hasStaticDeploy, sdErr := projectHasStaticDeployTask(ctx, projectID)
 
 			switch {
+			case gmErr == nil && generationModeIncludesBackendArtifact(genMode):
+				message = backendArtifactVerifyPrompt
+				uiTestsEnabled = false
+				if output.GetFormat() == output.FormatText {
+					output.Info("Detected generationMode=%q — running backend artifact API/lifecycle tests only. Use --ui-tests=true to force UI tests.", genMode)
+				}
 			case gmErr == nil && generationModeExcludesUI(genMode):
 				message = backendOnlyVerifyPrompt
 				uiTestsEnabled = false
@@ -332,6 +356,15 @@ func generationModeExcludesUI(mode string) bool {
 		}
 	}
 	return true
+}
+
+func generationModeIncludesBackendArtifact(mode string) bool {
+	for _, part := range strings.Split(strings.ToLower(strings.TrimSpace(mode)), ",") {
+		if strings.TrimSpace(part) == "backend-artifact" {
+			return true
+		}
+	}
+	return false
 }
 
 // projectHasStaticDeployTask scans the most recent 50 tasks for any with

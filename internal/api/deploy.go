@@ -119,6 +119,22 @@ type staticDeployEnvelope struct {
 	Error   string               `json:"error,omitempty"`
 }
 
+// BackendDeployResponse is the response from deploy-backend.
+type BackendDeployResponse struct {
+	ProjectID  string `json:"projectId"`
+	TaskID     string `json:"taskId"`
+	BackendURL string `json:"backendUrl,omitempty"`
+	Slug       string `json:"slug"`
+}
+
+func (r *BackendDeployResponse) QuietString() string { return r.BackendURL }
+
+type backendDeployEnvelope struct {
+	Success bool                  `json:"success"`
+	Data    BackendDeployResponse `json:"data"`
+	Error   string                `json:"error,omitempty"`
+}
+
 type uploadURLEnvelope struct {
 	Success bool `json:"success"`
 	Data    struct {
@@ -195,6 +211,78 @@ func (c *Client) DeployStatic(ctx context.Context, projectID string, archive []b
 	}
 
 	var envelope staticDeployEnvelope
+	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
+		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
+	}
+	if !envelope.Success {
+		msg := envelope.Error
+		if msg == "" {
+			msg = "deploy trigger returned success=false"
+		}
+		return nil, fmt.Errorf("deploy trigger failed: %s", msg)
+	}
+	return &envelope.Data, nil
+}
+
+// DeployBackend uploads a pre-built PartyServer backend bundle (tar.gz) to a
+// project's draft backend. The archive must contain poof-backend-artifact.json.
+func (c *Client) DeployBackend(ctx context.Context, projectID string, archive []byte, title, description string) (*BackendDeployResponse, error) {
+	uploadURLPath := fmt.Sprintf("/api/project/%s/deploy-backend/upload-url", projectID)
+	uploadReqBody := map[string]string{}
+	if title != "" {
+		uploadReqBody["title"] = title
+	}
+	if description != "" {
+		uploadReqBody["description"] = description
+	}
+
+	respBody, err := c.Do(ctx, "POST", uploadURLPath, uploadReqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get upload URL: %w", err)
+	}
+
+	var uploadURLResp uploadURLEnvelope
+	if err := json.Unmarshal(respBody, &uploadURLResp); err != nil {
+		return nil, fmt.Errorf("failed to parse upload URL response: %w", err)
+	}
+	if !uploadURLResp.Success || uploadURLResp.Data.UploadURL == "" {
+		if uploadURLResp.Error != "" {
+			return nil, fmt.Errorf("failed to get upload URL: %s", uploadURLResp.Error)
+		}
+		return nil, fmt.Errorf("server returned empty upload URL")
+	}
+
+	if uploadURLResp.Data.MaxSize > 0 && len(archive) > uploadURLResp.Data.MaxSize {
+		return nil, fmt.Errorf("archive size (%d bytes) exceeds maximum (%d bytes)", len(archive), uploadURLResp.Data.MaxSize)
+	}
+
+	s3Req, err := http.NewRequestWithContext(ctx, "PUT", uploadURLResp.Data.UploadURL, bytes.NewReader(archive))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create S3 upload request: %w", err)
+	}
+	s3Req.Header.Set("Content-Type", "application/gzip")
+	s3Req.ContentLength = int64(len(archive))
+
+	s3Resp, err := c.HTTPClient.Do(s3Req)
+	if err != nil {
+		return nil, fmt.Errorf("S3 upload failed: %w", err)
+	}
+	defer s3Resp.Body.Close()
+
+	if s3Resp.StatusCode >= 400 {
+		s3ErrBody, _ := io.ReadAll(io.LimitReader(s3Resp.Body, 1024))
+		return nil, fmt.Errorf("S3 upload failed (HTTP %d): %s", s3Resp.StatusCode, string(s3ErrBody))
+	}
+
+	triggerPath := fmt.Sprintf("/api/project/%s/deploy-backend/trigger", projectID)
+	triggerBody := map[string]string{"taskId": uploadURLResp.Data.TaskID}
+
+	triggerRespBody, err := c.Do(ctx, "POST", triggerPath, triggerBody)
+	if err != nil {
+		return nil, fmt.Errorf("deploy trigger failed: %w", err)
+	}
+
+	var envelope backendDeployEnvelope
 	if err := json.Unmarshal(triggerRespBody, &envelope); err != nil {
 		return nil, fmt.Errorf("failed to parse deploy response: %w", err)
 	}
