@@ -54,6 +54,22 @@ func TestValidateBackendArchive(t *testing.T) {
 			},
 		},
 		{
+			name: "valid with agents metadata",
+			files: map[string]string{
+				"poof-backend-artifact.json": `{"entrypoint":"worker.js","wranglerVersion":"4.45.2","agentsPath":"poof-agents.json"}`,
+				"worker.js":                  "export default { fetch() { return new Response('ok') } }",
+				"poof-agents.json":           `{"agents":[{"name":"intake"}]}`,
+			},
+		},
+		{
+			name: "missing agents metadata file",
+			files: map[string]string{
+				"poof-backend-artifact.json": `{"entrypoint":"worker.js","wranglerVersion":"4.45.2","agentsPath":"poof-agents.json"}`,
+				"worker.js":                  "export default { fetch() { return new Response('ok') } }",
+			},
+			wantErr: true,
+		},
+		{
 			name: "missing manifest",
 			files: map[string]string{
 				"worker.js": "export default {}",

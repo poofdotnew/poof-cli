@@ -303,6 +303,7 @@ type backendArtifactManifest struct {
 	APISpecPath     string `json:"apiSpecPath"`
 	QueuesPath      string `json:"queuesPath"`
 	HeartbeatPath   string `json:"heartbeatPath"`
+	AgentsPath      string `json:"agentsPath"`
 }
 
 func cleanArchivePath(value, field string) (string, error) {
@@ -415,6 +416,7 @@ func validateBackendArchive(archive []byte) error {
 		"apiSpecPath":   manifest.APISpecPath,
 		"queuesPath":    manifest.QueuesPath,
 		"heartbeatPath": manifest.HeartbeatPath,
+		"agentsPath":    manifest.AgentsPath,
 	} {
 		if strings.TrimSpace(value) == "" {
 			continue

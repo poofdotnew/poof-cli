@@ -302,12 +302,15 @@ cat > .poof-backend-bundle/poof-backend-artifact.json <<'JSON'
 {
   "entrypoint": "index.js",
   "wranglerVersion": "4.45.2",
-  "apiSpecPath": "generated/api-spec.json"
+  "apiSpecPath": "generated/api-spec.json",
+  "agentsPath": "poof-agents.json"
 }
 JSON
 tar czf backend-worker.tar.gz -C .poof-backend-bundle .
 poof deploy backend -p <id> --archive backend-worker.tar.gz
 ```
+
+`agentsPath` is optional, but when present the file must be included in the archive and is uploaded with the backend metadata.
 
 ### Tasks and Testing
 
