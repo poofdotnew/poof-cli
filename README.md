@@ -357,6 +357,7 @@ poof usage resume -p <id>                  # unblock a paused project (precondit
 ```bash
 poof security scan -p <id>            # initiate scan, return immediately
 poof security scan -p <id> --wait     # block until scan finishes, show findings
+poof security status -p <id> <scanId> # read existing scan status/results
 ```
 
 ### Secrets

@@ -25,7 +25,8 @@ queued (so agents can do other work and poll later). Pass --wait to block
 until the scan finishes and surface the findings inline.`,
 	Example: `  poof security scan -p <id>
   poof security scan -p <id> --wait
-  poof security scan -p <id> --task <taskId>
+  poof security scan -p <id> --task <taskId>   # scan a specific target task
+  poof security status -p <id> <scanId>        # read-only scan status/results
   poof security scan -p <id> --json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -106,7 +107,7 @@ until the scan finishes and surface the findings inline.`,
 			return fmt.Errorf("security scan failed: %w", err)
 		}
 
-		blocking := scan != nil && (scan.CriticalSeverity > 0 || scan.HighSeverity > 0)
+		blocking := securityScanBlocking(scan)
 
 		type scanResult struct {
 			ScanID   string                    `json:"scanId"`
@@ -173,8 +174,116 @@ until the scan finishes and surface the findings inline.`,
 	},
 }
 
+var securityStatusCmd = &cobra.Command{
+	Use:     "status <scanId>",
+	Aliases: []string{"result", "results"},
+	Short:   "Read security scan status/results without starting a new scan",
+	Long: `Fetch an existing security scan by scanId. This is read-only: it does
+not enqueue a new scan, and it is safe for agents to use when they need to cite
+findings from a scan that is already running or completed.`,
+	Example: `  poof security status -p <id> <scanId>
+  poof security results -p <id> <scanId> --json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := requireAuth(); err != nil {
+			return err
+		}
+
+		projectID, err := getProjectID()
+		if err != nil {
+			return err
+		}
+
+		scanID := args[0]
+		ctx := context.Background()
+
+		var scan *api.SecurityScanStatus
+		err = output.WithSpinner("Reading security scan...", func() error {
+			var scanErr error
+			scan, scanErr = apiClient.GetSecurityScan(ctx, projectID, scanID)
+			return scanErr
+		})
+		if err != nil {
+			return handleError(err)
+		}
+
+		blocking := securityScanBlocking(scan)
+		type scanStatusResult struct {
+			ScanID   string                  `json:"scanId"`
+			Blocking bool                    `json:"blocking"`
+			Scan     *api.SecurityScanStatus `json:"scan,omitempty"`
+		}
+		result := &scanStatusResult{ScanID: scanID, Blocking: blocking, Scan: scan}
+
+		output.Print(result, func() {
+			printSecurityScanStatus(scan, "")
+		})
+
+		if scan != nil && scan.Status == "failed" {
+			msg := scan.ErrorMessage
+			if msg == "" {
+				msg = "security scan failed"
+			}
+			return fmt.Errorf("security scan failed: %s", msg)
+		}
+		if blocking {
+			return fmt.Errorf("security scan blocked by %d critical + %d high findings",
+				scan.CriticalSeverity, scan.HighSeverity)
+		}
+		return nil
+	},
+}
+
 func init() {
-	securityScanCmd.Flags().String("task", "", "Task ID to check status of a previous scan")
+	securityScanCmd.Flags().String("task", "", "Target task ID to scan (does not read scan status; use `poof security status <scanId>` for read-only results)")
 	securityScanCmd.Flags().Bool("wait", false, "Block until the scan finishes and surface findings inline")
 	securityCmd.AddCommand(securityScanCmd)
+	securityCmd.AddCommand(securityStatusCmd)
+}
+
+func securityScanBlocking(scan *api.SecurityScanStatus) bool {
+	return scan != nil && (scan.CriticalSeverity > 0 || scan.HighSeverity > 0)
+}
+
+func printSecurityScanStatus(scan *api.SecurityScanStatus, targetTitle string) {
+	if scan == nil {
+		output.Warn("Scan completed but no status record returned.")
+		return
+	}
+	total := scan.TotalFindings
+	switch {
+	case securityScanBlocking(scan):
+		output.Warn("Scan %s with blocking findings: %d critical, %d high (of %d total).",
+			scan.Status, scan.CriticalSeverity, scan.HighSeverity, total)
+	case total > 0:
+		output.Warn("Scan %s with non-blocking findings: %d medium, %d low (of %d total).",
+			scan.Status, scan.MediumSeverity, scan.LowSeverity, total)
+	default:
+		output.Success("Scan %s. No findings.", scan.Status)
+	}
+	output.Info("  Scan ID:  %s", scan.ID)
+	if targetTitle != "" {
+		output.Info("  Target:   %s", targetTitle)
+	}
+	for _, f := range scan.Findings {
+		sev := strings.ToLower(f.Severity)
+		if sev != "critical" && sev != "high" {
+			continue
+		}
+		title := f.Title
+		if title == "" {
+			title = f.Category
+		}
+		if title == "" {
+			title = "(no title)"
+		}
+		if f.File != "" {
+			output.Warn("  [%s] %s — %s", strings.ToUpper(sev), title, f.File)
+		} else {
+			output.Warn("  [%s] %s", strings.ToUpper(sev), title)
+		}
+		if f.Description != "" {
+			output.Info("    %s", truncate(f.Description, 240))
+		}
+	}
 }

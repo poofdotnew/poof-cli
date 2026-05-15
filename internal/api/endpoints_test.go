@@ -686,6 +686,7 @@ func TestSecurityScan_Success(t *testing.T) {
 		}
 		json.NewEncoder(w).Encode(SecurityScanResponse{
 			Success:   true,
+			ScanID:    "scan-1",
 			MessageID: "msg-1",
 			Message:   "Security scan initiated successfully",
 			TaskID:    "task-1",
@@ -705,8 +706,53 @@ func TestSecurityScan_Success(t *testing.T) {
 	if resp.TaskID != "task-1" {
 		t.Errorf("expected TaskID=task-1, got %q", resp.TaskID)
 	}
+	if resp.ScanID != "scan-1" {
+		t.Errorf("expected ScanID=scan-1, got %q", resp.ScanID)
+	}
 	if resp.Message != "Security scan initiated successfully" {
 		t.Errorf("unexpected message: %q", resp.Message)
+	}
+}
+
+func TestGetSecurityScan_Success(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("expected GET, got %s", r.Method)
+		}
+		if r.URL.Path != "/api/project/proj-1/security-scan/scan-1" {
+			t.Errorf("unexpected path: %s", r.URL.Path)
+		}
+		json.NewEncoder(w).Encode(securityScanGetResponse{
+			Scan: SecurityScanStatus{
+				ID:               "scan-1",
+				Status:           "completed",
+				ScannedTaskID:    "task-1",
+				TotalFindings:    1,
+				CriticalSeverity: 0,
+				HighSeverity:     1,
+				Findings: []SecurityFinding{{
+					Severity: "high",
+					Title:    "Unsigned webhook",
+					File:     "partyserver/src/routes/webhook.ts",
+				}},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.GetSecurityScan(context.Background(), "proj-1", "scan-1")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.ID != "scan-1" {
+		t.Errorf("expected ID=scan-1, got %q", resp.ID)
+	}
+	if resp.HighSeverity != 1 {
+		t.Errorf("expected HighSeverity=1, got %d", resp.HighSeverity)
+	}
+	if len(resp.Findings) != 1 || resp.Findings[0].Title != "Unsigned webhook" {
+		t.Fatalf("unexpected findings: %#v", resp.Findings)
 	}
 }
 
