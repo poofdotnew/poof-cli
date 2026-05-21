@@ -422,8 +422,21 @@ func TestGetDownloadURL_Success(t *testing.T) {
 
 func TestGetDomains_Success(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		json.NewEncoder(w).Encode(DomainsResponse{
-			Domains: []Domain{{Domain: "example.com", IsDefault: true, Status: "active"}},
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"domains": []map[string]interface{}{
+				{
+					"id":        "dom_1",
+					"domain":    "example.com",
+					"isDefault": true,
+					"status":    "pending",
+					"statusDetails": `{
+						"status": "pending_validation",
+						"dns_records": [
+							{"type": "TXT", "name": "_acme-challenge.example.com", "value": "token", "required": true}
+						]
+					}`,
+				},
+			},
 		})
 	}))
 	defer srv.Close()
@@ -439,6 +452,13 @@ func TestGetDomains_Success(t *testing.T) {
 	if resp.Domains[0].Domain != "example.com" {
 		t.Errorf("expected domain=example.com, got %q", resp.Domains[0].Domain)
 	}
+	if resp.Domains[0].ID != "dom_1" {
+		t.Errorf("expected id=dom_1, got %q", resp.Domains[0].ID)
+	}
+	records := resp.Domains[0].RequiredDNSRecords()
+	if len(records) != 1 || records[0].Name != "_acme-challenge.example.com" {
+		t.Fatalf("expected ACME DNS record from statusDetails, got %#v", records)
+	}
 }
 
 func TestAddDomain_Success(t *testing.T) {
@@ -447,12 +467,24 @@ func TestAddDomain_Success(t *testing.T) {
 		body, _ := io.ReadAll(r.Body)
 		json.Unmarshal(body, &receivedBody)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{}`))
+		w.Write([]byte(`{
+			"domain": {
+				"id": "dom_1",
+				"domain": "mysite.com",
+				"status": "pending",
+				"isDefault": true,
+				"statusDetails": "{\"dns_records\":[{\"type\":\"TXT\",\"name\":\"_acme-challenge.mysite.com\",\"value\":\"token\",\"required\":true}]}"
+			},
+			"dnsInstructions": {
+				"records": [{"type":"TXT","name":"_acme-challenge.mysite.com","value":"token","required":true}]
+			},
+			"setupMethod": "ssl_pending_validation"
+		}`))
 	}))
 	defer srv.Close()
 
 	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
-	err := client.AddDomain(context.Background(), "proj-1", "mysite.com", true)
+	resp, err := client.AddDomain(context.Background(), "proj-1", "mysite.com", true)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -461,6 +493,12 @@ func TestAddDomain_Success(t *testing.T) {
 	}
 	if receivedBody["isDefault"] != true {
 		t.Errorf("expected isDefault=true, got %v", receivedBody["isDefault"])
+	}
+	if resp.Domain.ID != "dom_1" {
+		t.Errorf("expected response domain id, got %q", resp.Domain.ID)
+	}
+	if len(resp.Domain.RequiredDNSRecords()) != 1 {
+		t.Fatalf("expected response DNS records, got %#v", resp.Domain.RequiredDNSRecords())
 	}
 }
 
@@ -1172,7 +1210,7 @@ func TestDoWithTokenBody_401Retry(t *testing.T) {
 	client := newTestClient(srv.URL, auth)
 
 	// Use doWithTokenBody via a public method that uses it (e.g. AddDomain)
-	err := client.AddDomain(context.Background(), "proj-1", "test.com", false)
+	_, err := client.AddDomain(context.Background(), "proj-1", "test.com", false)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

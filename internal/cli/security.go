@@ -265,7 +265,8 @@ func printSecurityScanStatus(scan *api.SecurityScanStatus, targetTitle string) {
 	if targetTitle != "" {
 		output.Info("  Target:   %s", targetTitle)
 	}
-	for _, f := range scan.Findings {
+	for i := range scan.Findings {
+		f := &scan.Findings[i]
 		sev := strings.ToLower(f.Severity)
 		if sev != "critical" && sev != "high" {
 			continue
