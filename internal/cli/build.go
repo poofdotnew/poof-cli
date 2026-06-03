@@ -18,6 +18,7 @@ var buildCmd = &cobra.Command{
 	Example: `  poof build -m "Build a token-gated voting app"
   poof build -m "NFT marketplace" --mode policy
   poof build -m "Staking dashboard" --public=false
+  poof build -m "Realtime chat" --network realtime
   poof build -m "Match this UI" --file screenshot.png
   echo "Build a chat app" | poof build --stdin
   poof build -m "DEX" --json | jq '.urls.draft'`,
@@ -39,9 +40,15 @@ var buildCmd = &cobra.Command{
 
 		isPublic, _ := cmd.Flags().GetBool("public")
 		mode, _ := cmd.Flags().GetString("mode")
+		network, _ := cmd.Flags().GetString("network")
 
 		if err := validateMode(mode); err != nil {
 			return err
+		}
+		if network != "" {
+			if err := validateNetwork(network); err != nil {
+				return err
+			}
 		}
 
 		ctx := context.Background()
@@ -68,6 +75,7 @@ var buildCmd = &cobra.Command{
 			FirstMessage:   message,
 			IsPublic:       isPublic,
 			GenerationMode: mode,
+			Network:        network,
 		}
 		createResp, err := apiClient.CreateProject(ctx, req)
 		if err != nil {
@@ -165,5 +173,6 @@ func init() {
 	buildCmd.Flags().Bool("public", true, "Make project public")
 	buildCmd.Flags().Bool("stdin", false, "Read message from stdin")
 	buildCmd.Flags().String("mode", "full", "Generation mode: full, policy, ui,policy, backend,policy")
+	buildCmd.Flags().String("network", "", "Solana network: realtime, realtime_devnet, realtime_mainnet")
 	buildCmd.Flags().StringSlice("file", nil, "Image file(s) to attach (PNG, JPEG, GIF, WebP, max 3.4MB each)")
 }

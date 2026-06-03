@@ -60,6 +60,7 @@ var projectCreateCmd = &cobra.Command{
 	Example: `  poof project create -m "Build a token-gated voting app"
   poof project create -m "NFT marketplace" --mode policy
   poof project create -m "Staking dashboard" --public=false
+  poof project create -m "Realtime chat" --network realtime
   echo "Build a chat app" | poof project create --stdin`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := requireAuth(); err != nil {
@@ -70,6 +71,7 @@ var projectCreateCmd = &cobra.Command{
 		useStdin, _ := cmd.Flags().GetBool("stdin")
 		isPublic, _ := cmd.Flags().GetBool("public")
 		mode, _ := cmd.Flags().GetString("mode")
+		network, _ := cmd.Flags().GetString("network")
 
 		if useStdin {
 			message = readStdin()
@@ -81,11 +83,17 @@ var projectCreateCmd = &cobra.Command{
 		if err := validateMode(mode); err != nil {
 			return err
 		}
+		if network != "" {
+			if err := validateNetwork(network); err != nil {
+				return err
+			}
+		}
 
 		req := api.CreateProjectRequest{
 			FirstMessage:   message,
 			IsPublic:       isPublic,
 			GenerationMode: mode,
+			Network:        network,
 		}
 
 		resp, err := apiClient.CreateProject(context.Background(), req)
@@ -320,6 +328,7 @@ func init() {
 	projectCreateCmd.Flags().Bool("public", true, "Make project public")
 	projectCreateCmd.Flags().Bool("stdin", false, "Read message from stdin")
 	projectCreateCmd.Flags().String("mode", "full", "Generation mode: full, policy, ui,policy, backend,policy")
+	projectCreateCmd.Flags().String("network", "", "Solana network: realtime, realtime_devnet, realtime_mainnet")
 
 	projectUpdateCmd.Flags().String("title", "", "New title")
 	projectUpdateCmd.Flags().String("description", "", "New description")

@@ -66,6 +66,7 @@ type CreateProjectRequest struct {
 	TarobaseToken  string `json:"tarobaseToken"`
 	IsPublic       bool   `json:"isPublic"`
 	GenerationMode string `json:"generationMode,omitempty"`
+	Network        string `json:"network,omitempty"`
 }
 
 type CreateProjectResponse struct {
