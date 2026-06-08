@@ -46,6 +46,7 @@ type Project struct {
 	Slug           string `json:"slug"`
 	IsPublic       bool   `json:"isPublic"`
 	GenerationMode string `json:"generationMode,omitempty"`
+	Network        string `json:"network,omitempty"`
 }
 
 type ListProjectsResponse struct {
