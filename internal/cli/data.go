@@ -73,11 +73,21 @@ func resolveDataTarget(ctx context.Context) (*tarobase.ResolvedEnv, error) {
 		if err != nil {
 			return nil, err
 		}
+		apiURL := "https://api.tarobase.com"
+		authURL := "https://auth.tarobase.com"
+		if chain == tarobase.ChainRealtimeOffchain {
+			if cfg.PoofEnv == "staging" || cfg.PoofEnv == "local" {
+				apiURL = tarobase.RealtimeStagingURL
+				authURL = "https://auth-staging.tarobase.com"
+			} else {
+				apiURL = tarobase.RealtimeProductionURL
+			}
+		}
 		return &tarobase.ResolvedEnv{
 			AppID:   flagDataAppID,
 			Chain:   chain,
-			APIURL:  "https://api.tarobase.com",
-			AuthURL: "https://auth.tarobase.com",
+			APIURL:  apiURL,
+			AuthURL: authURL,
 		}, nil
 	}
 	if flagDataChain != "" {
@@ -100,13 +110,15 @@ func resolveDataTarget(ctx context.Context) (*tarobase.ResolvedEnv, error) {
 func parseChainFlag(s string) (tarobase.Chain, error) {
 	switch s {
 	case "":
-		return "", fmt.Errorf("--chain is required when --app-id is set (offchain | mainnet)")
+		return "", fmt.Errorf("--chain is required when --app-id is set (offchain | mainnet | realtime)")
 	case "offchain":
 		return tarobase.ChainOffchain, nil
 	case "mainnet", "solana_mainnet":
 		return tarobase.ChainMainnet, nil
+	case "realtime", "realtime_offchain":
+		return tarobase.ChainRealtimeOffchain, nil
 	default:
-		return "", fmt.Errorf("invalid --chain %q (valid: offchain, mainnet)", s)
+		return "", fmt.Errorf("invalid --chain %q (valid: offchain, mainnet, realtime)", s)
 	}
 }
 

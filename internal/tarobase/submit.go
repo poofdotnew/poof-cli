@@ -60,6 +60,9 @@ func (c *Client) SetManyAndSubmit(ctx context.Context, docs []Document, opts ...
 		}
 		return &SetManyResult{TransactionID: txid, Chain: ChainOffchain, Raw: raw}, nil
 
+	case ChainRealtimeOffchain:
+		return &SetManyResult{TransactionID: "realtime-direct", Chain: ChainRealtimeOffchain, Raw: raw}, nil
+
 	case ChainMainnet:
 		txid, err := c.submitMainnet(ctx, raw, opt)
 		if err != nil {
