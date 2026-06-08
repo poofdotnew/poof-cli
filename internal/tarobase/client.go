@@ -58,12 +58,8 @@ const (
 	ChainRealtimeOffchain Chain = "realtime_offchain"
 )
 
-const RealtimeStagingURL = "https://api-staging.bounded.sh"
-const RealtimeProductionURL = "https://api.bounded.sh"
-
-// Fallback URLs if bounded.sh DNS isn't set up yet
-const RealtimeStagingFallbackURL = "https://tarobase-realtime-staging.buildwithtarobase.workers.dev"
-const RealtimeProductionFallbackURL = "https://tarobase-realtime.buildwithtarobase.workers.dev"
+const RealtimeStagingURL = "https://realtime-staging.tarobase.com"
+const RealtimeProductionURL = "https://realtime.tarobase.com"
 
 // Client talks to the Tarobase data plane for a single Poof app environment.
 // One Client == one (appId, chain, session). Create a new one per environment;
