@@ -248,8 +248,8 @@ func (c *Client) submitPreBuiltTransaction(ctx context.Context, buildRaw json.Ra
 		Params: []any{
 			signedB64,
 			map[string]any{
-				"encoding":          "base64",
-				"skipPreflight":     opt.SkipPreflight,
+				"encoding":            "base64",
+				"skipPreflight":       opt.SkipPreflight,
 				"preflightCommitment": "confirmed",
 			},
 		},
