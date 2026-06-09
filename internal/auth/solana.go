@@ -97,28 +97,47 @@ func (kp *Keypair) SignTransaction(txBytes []byte) ([]byte, error) {
 		return nil, fmt.Errorf("transaction too short")
 	}
 
-	// Parse: first byte is compact-u16 number of signatures
-	numSigs := int(txBytes[0])
+	// Decode compact-u16 signature count (Solana wire format)
+	numSigs, headerLen := decodeCompactU16(txBytes)
 	if numSigs == 0 {
 		return nil, fmt.Errorf("transaction has 0 signature slots")
 	}
 
-	sigAreaSize := 1 + numSigs*64 // 1 byte count + N * 64-byte signatures
+	sigAreaSize := headerLen + numSigs*64
 	if len(txBytes) < sigAreaSize {
 		return nil, fmt.Errorf("transaction too short for %d signatures", numSigs)
 	}
 
-	// The message starts after the signature area
 	messageBytes := txBytes[sigAreaSize:]
-
-	// Sign the message
 	sig := kp.Sign(messageBytes)
 
-	// Create output with signature inserted at slot 0 (fee payer)
-	// For simplicity, we always sign as the first signer (fee payer position)
 	out := make([]byte, len(txBytes))
 	copy(out, txBytes)
-	copy(out[1:1+64], sig) // first signature slot
+	copy(out[headerLen:headerLen+64], sig) // first signature slot
 
 	return out, nil
+}
+
+// decodeCompactU16 decodes a Solana compact-u16 value from the start of buf.
+// Returns (value, bytesConsumed).
+func decodeCompactU16(buf []byte) (int, int) {
+	if len(buf) == 0 {
+		return 0, 0
+	}
+	b0 := int(buf[0])
+	if b0 < 0x80 {
+		return b0, 1
+	}
+	if len(buf) < 2 {
+		return b0 & 0x7f, 1
+	}
+	b1 := int(buf[1])
+	if b1 < 0x80 {
+		return (b0 & 0x7f) | (b1 << 7), 2
+	}
+	if len(buf) < 3 {
+		return (b0 & 0x7f) | ((b1 & 0x7f) << 7), 2
+	}
+	b2 := int(buf[2])
+	return (b0 & 0x7f) | ((b1 & 0x7f) << 7) | (b2 << 14), 3
 }
