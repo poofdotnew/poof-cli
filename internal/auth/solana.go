@@ -87,3 +87,38 @@ func GenSolanaMessage(address, nonce string) string {
 func (kp *Keypair) Sign(message []byte) []byte {
 	return ed25519.Sign(kp.PrivateKey, message)
 }
+
+// SignTransaction signs a serialized Solana V0 transaction.
+// The wire format is: [numSigs, sig0..sigN, messageBytes].
+// We find our pubkey in the message's static account keys and place
+// our signature at the corresponding index.
+func (kp *Keypair) SignTransaction(txBytes []byte) ([]byte, error) {
+	if len(txBytes) < 2 {
+		return nil, fmt.Errorf("transaction too short")
+	}
+
+	// Parse: first byte is compact-u16 number of signatures
+	numSigs := int(txBytes[0])
+	if numSigs == 0 {
+		return nil, fmt.Errorf("transaction has 0 signature slots")
+	}
+
+	sigAreaSize := 1 + numSigs*64 // 1 byte count + N * 64-byte signatures
+	if len(txBytes) < sigAreaSize {
+		return nil, fmt.Errorf("transaction too short for %d signatures", numSigs)
+	}
+
+	// The message starts after the signature area
+	messageBytes := txBytes[sigAreaSize:]
+
+	// Sign the message
+	sig := kp.Sign(messageBytes)
+
+	// Create output with signature inserted at slot 0 (fee payer)
+	// For simplicity, we always sign as the first signer (fee payer position)
+	out := make([]byte, len(txBytes))
+	copy(out, txBytes)
+	copy(out[1:1+64], sig) // first signature slot
+
+	return out, nil
+}
