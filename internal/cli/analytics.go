@@ -49,7 +49,7 @@ var analyticsCmd = &cobra.Command{
 
 			output.Info("")
 			output.Info("Summary")
-			output.Table([]string{"Metric", "Value"}, [][]string{
+			summaryRows := [][]string{
 				{"Events", formatCount(resp.Summary.Events)},
 				{"Page views", formatCount(resp.Summary.PageViews)},
 				{"Route views", formatCount(resp.Summary.RouteViews)},
@@ -63,8 +63,26 @@ var analyticsCmd = &cobra.Command{
 				{"Avg LCP", formatMs(resp.Summary.AverageLCPMs)},
 				{"Avg INP", formatMs(resp.Summary.AverageINPMs)},
 				{"Avg CLS", fmt.Sprintf("%.3f", resp.Summary.AverageCLS)},
-				{"Engaged seconds", formatCount(resp.Summary.EngagedSeconds)},
-			})
+			}
+			// Older servers omit the p75 fields; hide zero-value rows so they
+			// don't read as a perfect score.
+			if resp.Summary.P75TTFBMs > 0 {
+				summaryRows = append(summaryRows, []string{"P75 TTFB", formatMs(resp.Summary.P75TTFBMs)})
+			}
+			if resp.Summary.P75LCPMs > 0 {
+				summaryRows = append(summaryRows, []string{"P75 LCP", formatMs(resp.Summary.P75LCPMs)})
+			}
+			if resp.Summary.P75INPMs > 0 {
+				summaryRows = append(summaryRows, []string{"P75 INP", formatMs(resp.Summary.P75INPMs)})
+			}
+			if resp.Summary.P75CLS > 0 {
+				summaryRows = append(summaryRows, []string{"P75 CLS", fmt.Sprintf("%.3f", resp.Summary.P75CLS)})
+			}
+			if resp.Summary.LCPSampleCount > 0 {
+				summaryRows = append(summaryRows, []string{"LCP samples", formatCount(resp.Summary.LCPSampleCount)})
+			}
+			summaryRows = append(summaryRows, []string{"Engaged seconds", formatCount(resp.Summary.EngagedSeconds)})
+			output.Table([]string{"Metric", "Value"}, summaryRows)
 
 			if len(resp.TopPages) > 0 {
 				output.Info("")

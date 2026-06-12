@@ -53,6 +53,49 @@ func TestGetClientAppAnalytics_BuildsQuery(t *testing.T) {
 	}
 }
 
+func TestGetClientAppAnalytics_DecodesP75Fields(t *testing.T) {
+	// Raw JSON (not a struct round-trip) so a typo'd json tag cannot
+	// self-consistently pass: these names are the server wire contract.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{
+			"projectId": "proj-1",
+			"environment": "production",
+			"summary": {
+				"averageLcpMs": 21828,
+				"p75TtfbMs": 350.5,
+				"p75FcpMs": 1200,
+				"p75LcpMs": 2900,
+				"p75InpMs": 120,
+				"p75Cls": 0.009,
+				"ttfbSampleCount": 40,
+				"fcpSampleCount": 38,
+				"lcpSampleCount": 37,
+				"inpSampleCount": 21,
+				"clsSampleCount": 44
+			}
+		}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(srv.URL, &mockAuthProvider{token: "tok", walletAddress: "w"})
+	resp, err := client.GetClientAppAnalytics(context.Background(), "proj-1", "production", "1h", 10)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Summary.P75LCPMs != 2900 {
+		t.Errorf("expected p75LcpMs 2900, got %v", resp.Summary.P75LCPMs)
+	}
+	if resp.Summary.P75CLS != 0.009 {
+		t.Errorf("expected p75Cls 0.009, got %v", resp.Summary.P75CLS)
+	}
+	if resp.Summary.LCPSampleCount != 37 {
+		t.Errorf("expected lcpSampleCount 37, got %v", resp.Summary.LCPSampleCount)
+	}
+	if resp.Summary.AverageLCPMs != 21828 {
+		t.Errorf("expected averageLcpMs 21828, got %v", resp.Summary.AverageLCPMs)
+	}
+}
+
 func TestGetClientAppAnalytics_RejectsBadRange(t *testing.T) {
 	client := newTestClient("http://example.test", &mockAuthProvider{token: "tok", walletAddress: "w"})
 	_, err := client.GetClientAppAnalytics(context.Background(), "proj-1", "draft", "30d", 10)

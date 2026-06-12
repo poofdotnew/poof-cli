@@ -30,6 +30,16 @@ type ClientAnalyticsSummary struct {
 	AverageLCPMs      float64 `json:"averageLcpMs"`
 	AverageINPMs      float64 `json:"averageInpMs"`
 	AverageCLS        float64 `json:"averageCls"`
+	P75TTFBMs         float64 `json:"p75TtfbMs"`
+	P75FCPMs          float64 `json:"p75FcpMs"`
+	P75LCPMs          float64 `json:"p75LcpMs"`
+	P75INPMs          float64 `json:"p75InpMs"`
+	P75CLS            float64 `json:"p75Cls"`
+	TTFBSampleCount   float64 `json:"ttfbSampleCount"`
+	FCPSampleCount    float64 `json:"fcpSampleCount"`
+	LCPSampleCount    float64 `json:"lcpSampleCount"`
+	INPSampleCount    float64 `json:"inpSampleCount"`
+	CLSSampleCount    float64 `json:"clsSampleCount"`
 	EngagedSeconds    float64 `json:"engagedSeconds"`
 }
 
