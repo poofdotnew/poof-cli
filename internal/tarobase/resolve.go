@@ -3,6 +3,7 @@ package tarobase
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/poofdotnew/poof-cli/internal/api"
 )
@@ -30,17 +31,34 @@ func Resolve(ctx context.Context, poofAPI *api.Client, projectID string, env Env
 		return nil, fmt.Errorf("project %s has no connectionInfo — has it been built yet?", projectID)
 	}
 
+	isRealtime := strings.HasPrefix(status.Project.Network, "realtime")
+
 	var (
 		envInfo *api.ConnectionEnv
 		chain   Chain
 	)
 	switch env {
 	case EnvDraft:
-		envInfo, chain = status.ConnectionInfo.Draft, ChainOffchain
+		envInfo = status.ConnectionInfo.Draft
+		if isRealtime {
+			chain = ChainRealtimeOffchain
+		} else {
+			chain = ChainOffchain
+		}
 	case EnvPreview:
-		envInfo, chain = status.ConnectionInfo.Preview, ChainMainnet
+		envInfo = status.ConnectionInfo.Preview
+		if isRealtime {
+			chain = ChainRealtimeOffchain
+		} else {
+			chain = ChainMainnet
+		}
 	case EnvProduction:
-		envInfo, chain = status.ConnectionInfo.Production, ChainMainnet
+		envInfo = status.ConnectionInfo.Production
+		if isRealtime {
+			chain = ChainRealtimeOffchain
+		} else {
+			chain = ChainMainnet
+		}
 	default:
 		return nil, fmt.Errorf("invalid environment %q (valid: draft, preview, production)", env)
 	}
@@ -55,6 +73,12 @@ func Resolve(ctx context.Context, poofAPI *api.Client, projectID string, env Env
 	authURL := status.ConnectionInfo.AuthApiUrl
 	if authURL == "" {
 		authURL = "https://auth.tarobase.com"
+	}
+
+	// For realtime projects, route to the CF worker
+	if isRealtime {
+		apiURL = RealtimeProductionURL
+		// TODO: once realtime-staging.tarobase.com DNS is set up, use that for staging
 	}
 
 	return &ResolvedEnv{

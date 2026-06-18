@@ -172,6 +172,21 @@ func validateMode(mode string) error {
 	return nil
 }
 
+// validNetworks lists all supported network values for project creation.
+var validNetworks = map[string]bool{
+	"realtime":         true,
+	"realtime_devnet":  true,
+	"realtime_mainnet": true,
+}
+
+// validateNetwork checks if a network value is valid.
+func validateNetwork(network string) error {
+	if !validNetworks[network] {
+		return fmt.Errorf("invalid network %q (valid: realtime, realtime_devnet, realtime_mainnet)", network)
+	}
+	return nil
+}
+
 // handleError formats an API error with context-aware messaging and returns it.
 func handleError(err error) error {
 	apiErr, ok := api.IsAPIError(err)

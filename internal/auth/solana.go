@@ -87,3 +87,57 @@ func GenSolanaMessage(address, nonce string) string {
 func (kp *Keypair) Sign(message []byte) []byte {
 	return ed25519.Sign(kp.PrivateKey, message)
 }
+
+// SignTransaction signs a serialized Solana V0 transaction.
+// The wire format is: [numSigs, sig0..sigN, messageBytes].
+// We find our pubkey in the message's static account keys and place
+// our signature at the corresponding index.
+func (kp *Keypair) SignTransaction(txBytes []byte) ([]byte, error) {
+	if len(txBytes) < 2 {
+		return nil, fmt.Errorf("transaction too short")
+	}
+
+	// Decode compact-u16 signature count (Solana wire format)
+	numSigs, headerLen := decodeCompactU16(txBytes)
+	if numSigs == 0 {
+		return nil, fmt.Errorf("transaction has 0 signature slots")
+	}
+
+	sigAreaSize := headerLen + numSigs*64
+	if len(txBytes) < sigAreaSize {
+		return nil, fmt.Errorf("transaction too short for %d signatures", numSigs)
+	}
+
+	messageBytes := txBytes[sigAreaSize:]
+	sig := kp.Sign(messageBytes)
+
+	out := make([]byte, len(txBytes))
+	copy(out, txBytes)
+	copy(out[headerLen:headerLen+64], sig) // first signature slot
+
+	return out, nil
+}
+
+// decodeCompactU16 decodes a Solana compact-u16 value from the start of buf.
+// Returns (value, bytesConsumed).
+func decodeCompactU16(buf []byte) (int, int) {
+	if len(buf) == 0 {
+		return 0, 0
+	}
+	b0 := int(buf[0])
+	if b0 < 0x80 {
+		return b0, 1
+	}
+	if len(buf) < 2 {
+		return b0 & 0x7f, 1
+	}
+	b1 := int(buf[1])
+	if b1 < 0x80 {
+		return (b0 & 0x7f) | (b1 << 7), 2
+	}
+	if len(buf) < 3 {
+		return (b0 & 0x7f) | ((b1 & 0x7f) << 7), 2
+	}
+	b2 := int(buf[2])
+	return (b0 & 0x7f) | ((b1 & 0x7f) << 7) | (b2 << 14), 3
+}

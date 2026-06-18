@@ -73,11 +73,21 @@ func resolveDataTarget(ctx context.Context) (*tarobase.ResolvedEnv, error) {
 		if err != nil {
 			return nil, err
 		}
+		apiURL := "https://api.tarobase.com"
+		authURL := "https://auth.tarobase.com"
+		if chain == tarobase.ChainRealtimeOffchain {
+			if cfg.PoofEnv == "staging" || cfg.PoofEnv == "local" {
+				apiURL = tarobase.RealtimeStagingURL
+				authURL = "https://auth-staging.tarobase.com"
+			} else {
+				apiURL = tarobase.RealtimeProductionURL
+			}
+		}
 		return &tarobase.ResolvedEnv{
 			AppID:   flagDataAppID,
 			Chain:   chain,
-			APIURL:  "https://api.tarobase.com",
-			AuthURL: "https://auth.tarobase.com",
+			APIURL:  apiURL,
+			AuthURL: authURL,
 		}, nil
 	}
 	if flagDataChain != "" {
@@ -100,13 +110,15 @@ func resolveDataTarget(ctx context.Context) (*tarobase.ResolvedEnv, error) {
 func parseChainFlag(s string) (tarobase.Chain, error) {
 	switch s {
 	case "":
-		return "", fmt.Errorf("--chain is required when --app-id is set (offchain | mainnet)")
+		return "", fmt.Errorf("--chain is required when --app-id is set (offchain | mainnet | realtime)")
 	case "offchain":
 		return tarobase.ChainOffchain, nil
 	case "mainnet", "solana_mainnet":
 		return tarobase.ChainMainnet, nil
+	case "realtime", "realtime_offchain":
+		return tarobase.ChainRealtimeOffchain, nil
 	default:
-		return "", fmt.Errorf("invalid --chain %q (valid: offchain, mainnet)", s)
+		return "", fmt.Errorf("invalid --chain %q (valid: offchain, mainnet, realtime)", s)
 	}
 }
 
@@ -428,10 +440,15 @@ access to it.`,
 			}
 			return envRow{Env: env, AppID: c.TarobaseAppId, Chain: chain}
 		}
+		isRealtime := strings.HasPrefix(status.Project.Network, "realtime")
+		draftChain, previewChain, prodChain := "offchain", "mainnet", "mainnet"
+		if isRealtime {
+			draftChain, previewChain, prodChain = "realtime_offchain", "realtime_mainnet_preview", "realtime_mainnet"
+		}
 		rows := []envRow{
-			mk("draft", "offchain", ci.Draft),
-			mk("preview", "mainnet", ci.Preview),
-			mk("production", "mainnet", ci.Production),
+			mk("draft", draftChain, ci.Draft),
+			mk("preview", previewChain, ci.Preview),
+			mk("production", prodChain, ci.Production),
 		}
 		output.Print(map[string]any{"projectId": projectID, "envs": rows}, func() {
 			output.Info("project %s", projectID)

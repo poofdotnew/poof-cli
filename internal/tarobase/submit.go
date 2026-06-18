@@ -1,12 +1,15 @@
 package tarobase
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 )
 
 // SetManyResult is what Submit returns — always a tx signature (or
@@ -59,6 +62,17 @@ func (c *Client) SetManyAndSubmit(ctx context.Context, docs []Document, opts ...
 			return nil, err
 		}
 		return &SetManyResult{TransactionID: txid, Chain: ChainOffchain, Raw: raw}, nil
+
+	case ChainRealtimeOffchain:
+		// Check if the DO returned a 202 with transactions (onchain protocol)
+		if hasSerializedTransaction(raw) {
+			txid, err := c.submitPreBuiltTransaction(ctx, raw, opt)
+			if err != nil {
+				return nil, err
+			}
+			return &SetManyResult{TransactionID: txid, Chain: ChainRealtimeOffchain, Raw: raw}, nil
+		}
+		return &SetManyResult{TransactionID: "realtime-direct", Chain: ChainRealtimeOffchain, Raw: raw}, nil
 
 	case ChainMainnet:
 		txid, err := c.submitMainnet(ctx, raw, opt)
@@ -173,4 +187,103 @@ func (c *Client) submitOffchain(ctx context.Context, buildRaw json.RawMessage) (
 		return asStr, nil
 	}
 	return string(resp.Result), nil
+}
+
+// ---------------------------------------------------------------------------
+// Pre-built transaction (realtime onchain)
+// ---------------------------------------------------------------------------
+
+type preBuiltTxResponse struct {
+	Transactions []struct {
+		SerializedTransaction string `json:"serializedTransaction"`
+		Blockhash             string `json:"blockhash"`
+		LastValidBlockHeight  int64  `json:"lastValidBlockHeight"`
+		Network               string `json:"network"`
+	} `json:"transactions"`
+}
+
+func hasSerializedTransaction(raw json.RawMessage) bool {
+	var resp preBuiltTxResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		return false
+	}
+	return len(resp.Transactions) > 0 && resp.Transactions[0].SerializedTransaction != ""
+}
+
+func (c *Client) submitPreBuiltTransaction(ctx context.Context, buildRaw json.RawMessage, opt SubmitOptions) (string, error) {
+	var resp preBuiltTxResponse
+	if err := json.Unmarshal(buildRaw, &resp); err != nil {
+		return "", fmt.Errorf("parse pre-built tx response: %w", err)
+	}
+	if len(resp.Transactions) == 0 {
+		return "", fmt.Errorf("no transactions in pre-built response")
+	}
+
+	tx := resp.Transactions[0]
+
+	// Decode the serialized transaction
+	txBytes, err := base64.StdEncoding.DecodeString(tx.SerializedTransaction)
+	if err != nil {
+		return "", fmt.Errorf("decode serialized transaction: %w", err)
+	}
+
+	// Sign with our keypair
+	signedTxBytes, err := c.Keypair.SignTransaction(txBytes)
+	if err != nil {
+		return "", fmt.Errorf("sign transaction: %w", err)
+	}
+
+	// Determine RPC URL
+	rpcURL := envOrDefault("SOLANA_RPC_URL", "https://api.devnet.solana.com")
+	if tx.Network == "solana_mainnet" {
+		rpcURL = envOrDefault("SOLANA_MAINNET_RPC_URL", "https://api.mainnet-beta.solana.com")
+	}
+
+	// Submit via Solana RPC
+	signedB64 := base64.StdEncoding.EncodeToString(signedTxBytes)
+	rpcBody := rpcRequest{
+		JSONRPC: "2.0",
+		ID:      1,
+		Method:  "sendTransaction",
+		Params: []any{
+			signedB64,
+			map[string]any{
+				"encoding":            "base64",
+				"skipPreflight":       opt.SkipPreflight,
+				"preflightCommitment": "confirmed",
+			},
+		},
+	}
+
+	bodyJSON, _ := json.Marshal(rpcBody)
+	req, err := http.NewRequestWithContext(ctx, "POST", rpcURL, bytes.NewReader(bodyJSON))
+	if err != nil {
+		return "", fmt.Errorf("create rpc request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	rpcResp, err := c.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("solana rpc request: %w", err)
+	}
+	defer rpcResp.Body.Close()
+
+	respBody, err := io.ReadAll(rpcResp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read rpc response: %w", err)
+	}
+
+	var result rpcResponse
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return "", fmt.Errorf("parse rpc response: %w", err)
+	}
+	if result.Error != nil {
+		return "", fmt.Errorf("solana rpc error %d: %s", result.Error.Code, result.Error.Message)
+	}
+
+	var signature string
+	if err := json.Unmarshal(result.Result, &signature); err != nil {
+		return string(result.Result), nil
+	}
+	return signature, nil
 }

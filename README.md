@@ -118,6 +118,7 @@ These chain multiple operations together with polling and progress display.
 ```bash
 poof build -m "Build a todo app with Solana wallet auth"
 poof build -m "NFT marketplace" --mode policy --public=false
+poof build -m "Realtime chat" --network realtime
 poof build -m "Match this UI" --file screenshot.png
 poof build -m "Mirror both designs" --file page1.png --file page2.png
 ```
@@ -128,13 +129,14 @@ When `--file` is provided, the CLI uploads each image to Poof's global storage f
 
 **Flags:**
 
-| Flag            | Default    | Description                                                      |
-| --------------- | ---------- | ---------------------------------------------------------------- |
-| `-m, --message` | (required) | What to build                                                    |
-| `--mode`        | `full`     | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy` |
-| `--public`      | `true`     | Make project publicly visible                                    |
-| `--stdin`       | `false`    | Read message from stdin                                          |
-| `--file`        | (none)     | Image file(s) to attach (repeatable, PNG/JPEG/GIF/WebP, ≤3.4MB)  |
+| Flag            | Default    | Description                                                              |
+| --------------- | ---------- | ------------------------------------------------------------------------ |
+| `-m, --message` | (required) | What to build                                                            |
+| `--mode`        | `full`     | Generation mode: `full`, `policy`, `ui,policy`, `backend,policy`         |
+| `--network`     | (none)     | Solana network: `realtime`, `realtime_devnet`, `realtime_mainnet`        |
+| `--public`      | `true`     | Make project publicly visible                                            |
+| `--stdin`       | `false`    | Read message from stdin                                                  |
+| `--file`        | (none)     | Image file(s) to attach (repeatable, PNG/JPEG/GIF/WebP, ≤3.4MB)          |
 
 #### `poof iterate` — Chat and check results
 
@@ -205,6 +207,7 @@ Runs a security scan, checks publish eligibility, and deploys.
 ```bash
 poof project list                              # list all projects
 poof project create -m "Build a ..."           # create a project
+poof project create -m "Realtime app" --network realtime  # with network
 poof project status -p <id>                    # get status, URLs, deploy info
 poof project messages -p <id>                  # view conversation history
 poof project update -p <id> --title "My App"   # update metadata

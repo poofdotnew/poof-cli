@@ -18,6 +18,8 @@ make vet            # go vet ./...
 make all            # lint + test + build
 ```
 
+If `make build` fails due to xcode-select, use: `CGO_ENABLED=0 go build -o bin/poof ./cmd/poof/`
+
 Always run `make test` after changes. The pre-commit hook runs fmt, vet, lint, build, and test — all must pass.
 
 ## Project structure
@@ -31,9 +33,78 @@ internal/
   config/           Config loading (flags > env > .env > ~/.poof/config.yaml)
   output/           Text/JSON/Quiet formatting (fatih/color)
   poll/             Async task polling
+  tarobase/         Tarobase data plane client (items, queries, submit)
   version/          Version info injected via ldflags
   x402/             Solana USDC payment flow
 ```
+
+## Realtime DO Architecture
+
+The TaroBase platform has a new Cloudflare Durable Object (DO) based realtime engine that replaces the legacy Express/MongoDB client API for realtime apps.
+
+### Key concepts
+- **Chains**: `offchain` (legacy Express API), `solana_mainnet` (Solana RPC), `realtime_offchain` (CF DO)
+- **Routing**: The CF worker at `tarobase-realtime-staging.buildwithtarobase.workers.dev` (staging) or `tarobase-realtime.buildwithtarobase.workers.dev` (prod) checks KV for the appId — if present routes to DO, otherwise proxies to legacy
+- **Data plane**: The DO uses SQLite for storage, WebSocket Hibernation for subscriptions, and compiled bytecodes for policy enforcement
+- **Auth**: Same Cognito JWT as legacy — `auth.tarobase.com` (prod) or `auth-staging.tarobase.com` (staging)
+
+### CLI realtime chain (`--chain realtime`)
+- Maps to `ChainRealtimeOffchain` in `internal/tarobase/client.go`
+- Routes API calls to the CF worker URL instead of `api.tarobase.com`
+- For staging (`POOF_ENV=staging`), uses `auth-staging.tarobase.com` for session creation
+- Writes are direct — no offchainTransaction/sign/submit dance. The DO's `PUT /items` applies writes immediately
+
+### Testing with the CLI
+```bash
+# Auth against staging
+POOF_ENV=staging SOLANA_PRIVATE_KEY="$KEY" ./bin/poof auth login
+
+# Write data via realtime DO
+POOF_ENV=staging SOLANA_PRIVATE_KEY="$KEY" ./bin/poof data set \
+  --app-id "<appid>" --chain realtime \
+  --path notes/doc1 --data '{"title":"test","body":"hello"}'
+
+# Read data back
+POOF_ENV=staging SOLANA_PRIVATE_KEY="$KEY" ./bin/poof data get \
+  --app-id "<appid>" --chain realtime --path notes/doc1
+```
+
+### Creating test apps on staging
+1. Login to staging: `POOF_ENV=staging ./bin/poof auth login`
+2. Create app via developer API (use the JWT from `~/.poof/tokens.json`):
+   ```bash
+   TOKEN=$(python3 -c "import json; print(json.load(open('$HOME/.poof/tokens.json'))['id_token'])")
+   curl -s -X POST "https://developer-api-staging.tarobase.com/" \
+     -H "Authorization: Bearer $TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{"action":"createApp","appName":"test","appAuth":"onboard","appProtocol":"realtime_offchain"}'
+   ```
+3. Register in KV: `wrangler kv key put --namespace-id <id> "<appId>" '{"protocol":"realtime_offchain"}' --remote`
+4. Deploy policy via `updateApp` action (policy must be a JSON **string**, not object):
+   ```bash
+   curl -X POST "https://developer-api-staging.tarobase.com/" \
+     -H "Authorization: Bearer $TOKEN" -H "X-User-Address: $WALLET" \
+     -d '{"action":"updateApp","appId":"<id>","appModifications":{"policy":"{...json string...}","plugins":{}}}'
+   ```
+5. If bytecodes don't compile on staging, push config directly to DO:
+   ```bash
+   curl -X POST -H "X-Internal-Secret: <secret>" -H "X-Api-Key: <appId>" \
+     "<worker-url>/internal/config-update" -d '{"config":{...}}'
+   ```
+
+### Staging infrastructure
+- **CF Worker**: `tarobase-realtime-staging.buildwithtarobase.workers.dev`
+- **KV namespace**: `2b5025564e1b4c5a8f865c2759d51be9`
+- **Developer API**: `developer-api-staging.tarobase.com` (Fly app: `tarobase-developer-api-staging`)
+- **Auth**: `auth-staging.tarobase.com`
+- **INTERNAL_SECRET**: Must match `POOF_INTERNAL_API_KEY` on the developer API staging
+- **Vercel staging** (`v2-staging.poof.new`) has auth protection — needs `VERCEL_BYPASS_TOKEN`
+- **Fly logs**: `fly logs -a tarobase-developer-api-staging --no-tail`
+
+### Known staging issues
+- `validateAndPreparePolicy` expects policy as a JSON string, not an object
+- Bytecode compilation on staging dev API may fail silently — push config directly to DO as workaround
+- The staging Poof frontend (`v2-staging.poof.new`) requires Vercel bypass token
 
 ## Code conventions
 

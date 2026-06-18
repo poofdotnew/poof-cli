@@ -53,9 +53,13 @@ const (
 type Chain string
 
 const (
-	ChainOffchain Chain = "offchain"
-	ChainMainnet  Chain = "solana_mainnet"
+	ChainOffchain         Chain = "offchain"
+	ChainMainnet          Chain = "solana_mainnet"
+	ChainRealtimeOffchain Chain = "realtime_offchain"
 )
+
+const RealtimeStagingURL = "https://realtime-staging.tarobase.com"
+const RealtimeProductionURL = "https://realtime.tarobase.com"
 
 // Client talks to the Tarobase data plane for a single Poof app environment.
 // One Client == one (appId, chain, session). Create a new one per environment;
